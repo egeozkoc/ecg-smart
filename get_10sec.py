@@ -5,6 +5,27 @@ import scipy.io as io
 import scipy.signal as signal
 import matplotlib.pyplot as plt
 import multiprocessing
+import json
+import base64
+import struct
+
+def decode_ekg_muse_to_array(raw_wave, downsample = 1):
+    """
+    Ingest the base64 encoded waveforms and transform to numeric
+
+    downsample: 0.5 takes every other value in the array. Muse samples at 500/s and the sample model requires 250/s. So take every other.
+    """
+    try:
+        dwnsmpl = int(1//downsample)
+    except ZeroDivisionError:
+        print("You must downsample by more than 0")
+    # covert the waveform from base64 to byte array
+    arr = base64.b64decode(bytes(raw_wave, 'utf-8'))
+
+    # unpack every 2 bytes, little endian (16 bit encoding)
+    unpack_symbols = ''.join([char*int(len(arr)/2) for char in 'h'])
+    byte_array = struct.unpack(unpack_symbols,  arr)
+    return np.array(byte_array)
 
 def get10sec(filename, lpf=100):
     print(filename)
@@ -14,50 +35,221 @@ def get10sec(filename, lpf=100):
 # Get Raw ECG data
 ############################################################################################################
     
-    dic = xmltodict.parse(open(filename, 'rb'))
-    if 'restingecgdata' in dic:
-        age = int(dic['restingecgdata']['patient']['generalpatientdata']['age']['years'])
-        sex = dic['restingecgdata']['patient']['generalpatientdata']['sex']
-        fs = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['samplingrate'])
-        raw_ecg = dic['restingecgdata']['waveforms']['parsedwaveforms']['#text'].split()
-        if 'signalresolution' in dic['restingecgdata']['dataacquisition']['signalcharacteristics']:
-            signal_res = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['signalresolution'])
-        else:
-            signal_res = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['resolution'])
-        ecg = np.empty([len(leads), 10 * fs])
-        for i in range(len(leads)):
-            ecg[i, :] = raw_ecg[i * fs * 11:i * fs * 11 + fs * 10]
-        ecg *= signal_res # scale ECG signal to uV
-    else:
-        if 'root' in dic:
+    if filename.split('.')[-1] == 'xml':
+        dic = xmltodict.parse(open(filename, 'rb'))
+
+        # Philips XML
+        if 'restingecgdata' in dic:
+            fs = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['samplingrate'])
+            raw_ecg = dic['restingecgdata']['waveforms']['parsedwaveforms']['#text'].split()
+            if 'signalresolution' in dic['restingecgdata']['dataacquisition']['signalcharacteristics']:
+                signal_res = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['signalresolution'])
+            else:
+                signal_res = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['resolution'])
+            ecg = np.empty([len(leads), 10 * fs])
+            for i in range(len(leads)):
+                ecg[i, :] = raw_ecg[i * fs * 11:i * fs * 11 + fs * 10]
+            ecg *= signal_res # scale ECG signal to uV
+
+            try:
+                age = int(dic['restingecgdata']['patient']['generalpatientdata']['age']['years'])
+            except:
+                print('Error: Age not found')
+                age = 60
+            try:
+                sex = dic['restingecgdata']['patient']['generalpatientdata']['sex'].lower()
+                if sex == 'female':
+                    sex = 1
+                else:
+                    sex = 0
+            except:
+                print('Error: Sex not found')
+                sex = 0
+
+        elif 'root' in dic:
             fs = int(dic['root']['ECGRecord']['Record']['RecordData'][0]['Waveforms']['XValues']['SampleRate']['#text'])
             raw_ecg = dic['root']['ECGRecord']['Record']['RecordData']
-            age = int(dic['root']['ECGRecord']['PatientDemographics']['Age']['#text'])
-            sex = dic['root']['ECGRecord']['PatientDemographics']['Sex']
-        else:
+            ecg = np.empty([12, 5000], dtype=float)
+            leadnames = []
+            for i in range(len(raw_ecg)):
+                leadnames.append(raw_ecg[i]['Channel'])
+            for i in range(len(leads)):
+                j = leadnames.index(leads[i])
+                scale = float(raw_ecg[j]['Waveforms']['YValues']['RealValue']['Scale']) * 1000
+                data = raw_ecg[j]['Waveforms']['YValues']['RealValue']['Data'].split(',')
+                data = ['0' if x == '' else x for x in data]
+                ecg[i, :] = np.array(data)
+                ecg[i, :] *= scale
+            try:
+                age = int(dic['root']['ECGRecord']['PatientDemographics']['Age']['#text'])
+            except:
+                print('Error: Age not found')
+                age = 60
+            try:
+                sex = dic['root']['ECGRecord']['PatientDemographics']['Sex'].lower()
+                if sex == 'female':
+                    sex = 1
+                else:
+                    sex = 0
+            except:
+                print('Error: Sex not found')
+                sex = 0
+
+        # Physio-Control XML
+        elif 'ECGRecord' in dic:
             fs = int(dic['ECGRecord']['Record']['RecordData'][0]['Waveforms']['XValues']['SampleRate']['#text'])
             raw_ecg = dic['ECGRecord']['Record']['RecordData']
-            age = int(dic['ECGRecord']['PatientDemographics']['Age']['#text'])
-            sex = dic['ECGRecord']['PatientDemographics']['Sex']
-        ecg = np.empty([12, 5000], dtype=float)
-        leadnames = []
-        for i in range(len(raw_ecg)):
-            leadnames.append(raw_ecg[i]['Channel'])
-        for i in range(len(leads)):
-            j = leadnames.index(leads[i])
-            scale = float(raw_ecg[j]['Waveforms']['YValues']['RealValue']['Scale']) * 1000
-            data = raw_ecg[j]['Waveforms']['YValues']['RealValue']['Data'].split(',')
-            data = ['0' if x == '' else x for x in data]
-            ecg[i, :] = np.array(data)
-            ecg[i, :] *= scale
+            ecg = np.empty([12, 5000], dtype=float)
+            leadnames = []
+            for i in range(len(raw_ecg)):
+                leadnames.append(raw_ecg[i]['Channel'])
+            for i in range(len(leads)):
+                j = leadnames.index(leads[i])
+                scale = float(raw_ecg[j]['Waveforms']['YValues']['RealValue']['Scale']) * 1000
+                data = raw_ecg[j]['Waveforms']['YValues']['RealValue']['Data'].split(',')
+                data = ['0' if x == '' else x for x in data]
+                ecg[i, :] = np.array(data)
+                ecg[i, :] *= scale
+            try:
+                age = int(dic['ECGRecord']['PatientDemographics']['Age']['#text'])
+            except:
+                print('Error: Age not found')
+                age = 60
+            try:
+                sex = dic['ECGRecord']['PatientDemographics']['Sex'].lower()
+                if sex == 'female':
+                    sex = 1
+                else:
+                    sex = 0
+            except:
+                print('Error: Sex not found')
+                sex = 0
 
+        # Mortara XML
+        elif 'ECG' in dic:
+            try:
+                age = int(dic['ECG']['@AGE'])
+            except:
+                print('Error: Age not found')
+                age = 60
+            try:
+                sex = dic['ECG']['SUBJECT']['@GENDER'].lower()
+                if sex == 'female':
+                    sex = 1
+                else:
+                    sex = 0
+            except:
+                print('Error: Sex not found')
+                sex = 0
+            fs = int(dic['ECG']['TYPICAL_CYCLE']['@SAMPLE_FREQ'])
+            scale = int(dic['ECG']['TYPICAL_CYCLE']['@UNITS_PER_MV'])
+
+            ecg = np.empty([12, 10000], dtype=float)
+            for i in range(12):
+                lead_data = dic['ECG']['CHANNEL'][i]['@DATA']
+                # convert data from base64 to floats
+                arr = base64.b64decode(bytes(lead_data, 'utf-8'))
+                # unpack every 2 bytes, little endian (16 bit encoding)
+                unpack_symbols = ''.join([char*int(len(arr)/2) for char in 'h'])
+                byte_array = struct.unpack(unpack_symbols,  arr)
+                lead_data = np.array(byte_array)
+                ecg[i, :] = lead_data / scale * 1000
+
+        # GE MUSE XML
+        elif 'RestingECG' in dic:
+            fs = int(dic['RestingECG']['Waveform'][1]['SampleBase'])
+            try:
+                age = int(dic['RestingECG']['PatientDemographics']['PatientAge'])
+            except:
+                print('Error: Age not found')
+                age = 60
+            try:
+                sex = dic['RestingECG']['PatientDemographics']['Gender'].lower()
+                if sex == 'female':
+                    sex = 1
+                else:
+                    sex = 0
+            except:
+                print('Error: Sex not found')
+                sex = 0
+        
+            lead_order = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+            lead_data = dict.fromkeys(lead_order)
+            for waveform in dic['RestingECG']['Waveform']:
+                if waveform['WaveformType'] == 'Rhythm':
+                    for leadid in range(len(waveform['LeadData'])):
+                        sample_length = len(decode_ekg_muse_to_array(waveform['LeadData'][leadid]['WaveFormData']))
+                        # sample_length is equivalent to dic['RestingECG']['Waveform']['LeadData']['LeadSampleCountTotal']
+                        if sample_length == 5000:
+                            lead_data[waveform['LeadData'][leadid]['LeadID']] = decode_ekg_muse_to_array(
+                                waveform['LeadData'][leadid]['WaveFormData'], downsample=1)
+                        elif sample_length == 2500:
+                            lead_data[waveform['LeadData'][leadid]['LeadID']] = decode_ekg_muse_to_array(
+                                waveform['LeadData'][leadid]['WaveFormData'], downsample=2)
+                        else:
+                            continue
+                # ensures all leads have 2500 samples and also passes over the 3 second waveform
+
+            lead_data['III'] = (np.array(lead_data["II"]) - np.array(lead_data["I"]))
+            lead_data['aVR'] = -(np.array(lead_data["I"]) + np.array(lead_data["II"])) / 2
+            lead_data['aVF'] = (np.array(lead_data["II"]) + np.array(lead_data["III"])) / 2
+            lead_data['aVL'] = (np.array(lead_data["I"]) - np.array(lead_data["III"])) / 2
+            lead_data = {k: lead_data[k] for k in lead_order}
+            temp = []
+            for key, value in lead_data.items():
+                temp.append(value)
+            ecg = np.array(temp)
+            ecg *= 4.88 # convert to uV
+
+    # ZOLL XML
+    elif filename.split('.')[-1] == 'json':
+        print('ZOLL json file amplitudes are incorrect. Do not use until fixed.')
+        with open(filename) as f:
+            dic = json.load(f)
+        f.close()
+
+        try:
+            age = int(dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['AnalysisResult']['Age'])
+        except:
+            print('Error: Age not found')
+            age = 60
+        try:
+            sex = int(dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['AnalysisResult']['Gender'])
+            if sex == 2:
+                sex = 1
+            else:
+                sex = 0
+        except:
+            print('Error: Sex not found')
+            sex = 0
+        
+        leads = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+        ecg = np.empty([12, 5000], dtype=float)
+        ecg[0] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadI']
+        ecg[1] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadII']
+        ecg[2] = ecg[1] - ecg[0]
+        ecg[3] = -(ecg[0] + ecg[1]) / 2
+        ecg[4] = ecg[0] - ecg[1] / 2
+        ecg[5] = ecg[1] - ecg[0] / 2
+        ecg[6] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV1']
+        ecg[7] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV2']
+        ecg[8] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV3']
+        ecg[9] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV4']
+        ecg[10] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV5']
+        ecg[11] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV6']
+        fs = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['SampleRate']
+
+    if fs != 500:
+        sig_len = int(ecg.shape[1] / fs * 500)
+        ecg = signal.resample(ecg, sig_len, axis=1)
+        fs = 500
     ecg_raw = ecg.copy()
 
 ############################################################################################################
 # Remove Baseline Wander
 ############################################################################################################
 
-    b_baseline = io.loadmat('../filters/baseline_filt.mat')['Num'][0]
+    b_baseline = io.loadmat('filters/baseline_filt.mat')['Num'][0]
     ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
     ecg = signal.filtfilt(b_baseline, 1, ecg, axis=1)
     ecg = ecg - np.median(ecg,axis=1)[:,None]
@@ -103,28 +295,28 @@ def get10sec(filename, lpf=100):
 
     if lpf == 100:
         # low pass hamming window filter
-        b_low = io.loadmat('../filters/lowpass100_filt.mat')['Num'][0]
+        b_low = io.loadmat('filters/lowpass100_filt.mat')['Num'][0]
         ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
         ecg = signal.filtfilt(b_low, 1, ecg, axis=1)
 
         # pli filter
-        b_pli50 = io.loadmat('../filters/pli50_filt.mat')['Num'][0]
-        b_pli60 = io.loadmat('../filters/pli60_filt.mat')['Num'][0]
+        b_pli50 = io.loadmat('filters/pli50_filt.mat')['Num'][0]
+        b_pli60 = io.loadmat('filters/pli60_filt.mat')['Num'][0]
 
         ecg = signal.filtfilt(b_pli50, 1, ecg, axis=1)
         ecg = signal.filtfilt(b_pli60, 1, ecg, axis=1)
 
     elif lpf == 150:
         # low pass hamming window filter
-        b_low = io.loadmat('../filters/lowpass150_filt.mat')['Num'][0]
+        b_low = io.loadmat('filters/lowpass150_filt.mat')['Num'][0]
         ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
         ecg = signal.filtfilt(b_low, 1, ecg, axis=1)
 
         # pli filter
-        b_pli50 = io.loadmat('../filters/pli50_filt.mat')['Num'][0]
-        b_pli60 = io.loadmat('../filters/pli60_filt.mat')['Num'][0]
-        b_pli100 = io.loadmat('../filters/pli100_filt.mat')['Num'][0]
-        b_pli120 = io.loadmat('../filters/pli120_filt.mat')['Num'][0]
+        b_pli50 = io.loadmat('filters/pli50_filt.mat')['Num'][0]
+        b_pli60 = io.loadmat('filters/pli60_filt.mat')['Num'][0]
+        b_pli100 = io.loadmat('filters/pli100_filt.mat')['Num'][0]
+        b_pli120 = io.loadmat('filters/pli120_filt.mat')['Num'][0]
 
         ecg = signal.filtfilt(b_pli50, 1, ecg, axis=1)
         ecg = signal.filtfilt(b_pli60, 1, ecg, axis=1)
