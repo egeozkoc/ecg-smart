@@ -8,17 +8,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 import multiprocessing
 import pandas as pd
+import json
 
 from get_10sec import get10sec
 from get_median import getMedianBeat
 from get_fiducials import getFiducials
 from get_features import getFeatures
+from tkinter.filedialog import askdirectory
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()  # Convert numpy arrays to lists
+        elif isinstance(obj, (np.integer, np.int32, np.int64)):
+            return int(obj)  # Convert numpy integers to Python int
+        elif isinstance(obj, (np.floating, np.float32, np.float64)):
+            return float(obj)  # Convert numpy floats to Python float
+        elif isinstance(obj, (np.bool_,)):  # Convert numpy booleans to Python bool
+            return bool(obj)
+        else:
+            return super().default(obj)  # Use the default behavior for other types
 
 class ECG:
     def __init__(self, filename):
         self.filename = filename
         self.id = filename.split('\\')[-1].split('.')[0]
-        self.waveforms = {'ecg_10sec_raw': None, 'ecg_10sec_filtered': None, 'ecg_10sec_clean': None, 'ecg_median': None, 'beats': None}
+        self.waveforms = {'ecg_10sec_clean': None, 'ecg_median': None, 'beats': None}
         self.fiducials = {'local': None, 'global': None, 'pacing_spikes': None, 'r_peaks': None}
         self.features = {}
         self.demographics = {'age': None, 'sex': None}
@@ -28,8 +43,6 @@ class ECG:
 
     def processRawData(self):
         data = get10sec(self.filename, 100)
-        self.waveforms['ecg_10sec_raw'] = data['ecg_raw']
-        self.waveforms['ecg_10sec_filtered'] = data['ecg_filtered']
         self.waveforms['ecg_10sec_clean'] = data['ecg_clean']
         self.fs = data['fs']
         self.leads = data['leads']
@@ -60,19 +73,20 @@ def process_file(filename):
     ecg.processMedian()
     ecg.segmentMedian()
     ecg.processFeatures()
-    np.save('../ecgs100/' + ecg.id, ecg, allow_pickle=True)
+
+    # convert ecg to dictionary
+    ecg = {k: v for k, v in ecg.__dict__.items() if v is not None}
+
+    # save ecg to json
+    with open(folder1 + '/' + ecg['id'] + '.json', 'w') as f:
+        json.dump(ecg1, f, cls=NumpyEncoder, indent=4)
 
 def ecg2csv(filenames):
     df_all = pd.DataFrame()
-    # outcomes = pd.read_csv('../outcomes/outcomes.csv')
     for filename in filenames:
         print(filename)
         ecg = np.load(filename, allow_pickle=True).item()
         df_pt = pd.DataFrame(ecg.features, index=[ecg.id])
-        # df_pt['outcome_omi'] = outcomes.loc[outcomes['id'] == ecg.id, 'outcome_omi'].values[0]
-        # df_pt['outcome_acs'] = outcomes.loc[outcomes['id'] == ecg.id, 'outcome_acs'].values[0]
-        # df_pt['poor_quality'] = ecg.poor_quality
-        # df_pt['outcome_vt'] = outcomes.loc[outcomes['id'] == ecg.id, 'outcome_vt'].values[0]
         df_all = pd.concat([df_all, df_pt])
 
     df_all.to_csv('features100.csv')
@@ -88,23 +102,26 @@ def poor_quality2csv(filenames):
 
 # main
 if __name__ == '__main__':
-    # filenames = glob('../xmls/registry/*.xml')
-    # # filenames1 = glob('../ecgs150/*.npy')
-    # # filenames1 = [filename.replace('npy','xml').replace('ecgs150','xmls/registry') for filename in filenames1]
-    # # filenames = np.setdiff1d(filenames, filenames1)
 
-    # # idx1 = np.where(np.char.find(filenames, 'reg07300-1') != -1)[0][0]
-    # # idx2 = np.where(np.char.find(filenames, 'reg07400-1') != -1)[0][0]
-    # # filenames = filenames[idx1:idx2]
+    # browse to get folders
+    print('Select folder containing raw ECGs')
+    folder = askdirectory()
+    print('Select folder to save processed ECGs')
+    global folder1
+    folder1 = askdirectory()
 
-    # # for filename in filenames[0:]:
-    # #     process_file(filename)
+    filenames = glob(folder+'/*.xml') + glob(folder+'/*.hea') + glob(folder+'/*.json') + glob(folder+'/*/*.hea')
+    # ask user if they want to run in parallel
+    parallel = input('Run in parallel? (y/n) ')
+    parallel = parallel.lower()
+    if parallel == 'y':
+        pool = multiprocessing.Pool(processes = multiprocessing.cpu_count()-1)
+        pool.map(process_file, filenames)
+    else:
+        for filename in filenames:
+            process_file(filename)
 
-    # # run code on multiple cores
-    # pool = multiprocessing.Pool(processes = multiprocessing.cpu_count()-1)
-    # pool.map(process_file, filenames)
-
-    filenames1 = glob('../ecgs100/*.npy')
-    # poor_quality2csv(filenames1)
-    ecg2csv(filenames1)
+    # filenames1 = glob('../ecgs100/*.npy')
+    # # poor_quality2csv(filenames1)
+    # ecg2csv(filenames1)
     

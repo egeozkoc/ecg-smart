@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import xmltodict
 from glob import glob
 import scipy.io as io
@@ -8,6 +9,8 @@ import multiprocessing
 import json
 import base64
 import struct
+from tkinter.filedialog import askopenfilename
+import wfdb
 
 def decode_ekg_muse_to_array(raw_wave, downsample = 1):
     """
@@ -239,6 +242,17 @@ def get10sec(filename, lpf=100):
         ecg[11] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV6']
         fs = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['SampleRate']
 
+    # PTB-XL
+    elif filename.split('.')[-1] == 'hea':
+        ecg = wfdb.rdsamp(filename.split('.')[0])[0]
+        ecg = ecg.T
+        ecg *= 1000 # convert to uV
+        fs = 500
+        age = 60
+        sex = 0
+        print('Error: Age not found')
+        print('Error: Sex not found')
+
     if fs != 500:
         sig_len = int(ecg.shape[1] / fs * 500)
         ecg = signal.resample(ecg, sig_len, axis=1)
@@ -250,8 +264,7 @@ def get10sec(filename, lpf=100):
 ############################################################################################################
 
     b_baseline = io.loadmat('filters/baseline_filt.mat')['Num'][0]
-    ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
-    ecg = signal.filtfilt(b_baseline, 1, ecg, axis=1)
+    ecg = signal.filtfilt(b_baseline, 1, ecg, axis=1, padtype='even', padlen=1000)
     ecg = ecg - np.median(ecg,axis=1)[:,None]
 
 ############################################################################################################
@@ -259,9 +272,7 @@ def get10sec(filename, lpf=100):
 ############################################################################################################
 
     b_pace, a_pace = signal.butter(2, 80, btype='highpass', fs=500)
-    ecg_pace = signal.filtfilt(b_pace, a_pace, ecg, axis=-1)
-    ecg = ecg[:,1000:-1000]
-    ecg_pace = ecg_pace[:,1000:-1000]
+    ecg_pace = signal.filtfilt(b_pace, a_pace, ecg, axis=-1, padtype='even', padlen=1000)
 
     rms_pace = np.sqrt(np.sum(ecg_pace**2,axis=0)) / np.sqrt(12)
     rms_ecg = np.sqrt(np.sum(ecg**2,axis=0)) / np.sqrt(12)
@@ -296,21 +307,19 @@ def get10sec(filename, lpf=100):
     if lpf == 100:
         # low pass hamming window filter
         b_low = io.loadmat('filters/lowpass100_filt.mat')['Num'][0]
-        ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
-        ecg = signal.filtfilt(b_low, 1, ecg, axis=1)
+        ecg = signal.filtfilt(b_low, 1, ecg, axis=1, padtype='even', padlen=1000)
 
         # pli filter
         b_pli50 = io.loadmat('filters/pli50_filt.mat')['Num'][0]
         b_pli60 = io.loadmat('filters/pli60_filt.mat')['Num'][0]
 
-        ecg = signal.filtfilt(b_pli50, 1, ecg, axis=1)
-        ecg = signal.filtfilt(b_pli60, 1, ecg, axis=1)
+        ecg = signal.filtfilt(b_pli50, 1, ecg, axis=1, padtype='even', padlen=1000)
+        ecg = signal.filtfilt(b_pli60, 1, ecg, axis=1, padtype='even', padlen=1000)
 
     elif lpf == 150:
         # low pass hamming window filter
         b_low = io.loadmat('filters/lowpass150_filt.mat')['Num'][0]
-        ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
-        ecg = signal.filtfilt(b_low, 1, ecg, axis=1)
+        ecg = signal.filtfilt(b_low, 1, ecg, axis=1, padtype='even', padlen=1000)
 
         # pli filter
         b_pli50 = io.loadmat('filters/pli50_filt.mat')['Num'][0]
@@ -318,12 +327,11 @@ def get10sec(filename, lpf=100):
         b_pli100 = io.loadmat('filters/pli100_filt.mat')['Num'][0]
         b_pli120 = io.loadmat('filters/pli120_filt.mat')['Num'][0]
 
-        ecg = signal.filtfilt(b_pli50, 1, ecg, axis=1)
-        ecg = signal.filtfilt(b_pli60, 1, ecg, axis=1)
-        ecg = signal.filtfilt(b_pli100, 1, ecg, axis=1)
-        ecg = signal.filtfilt(b_pli120, 1, ecg, axis=1)
+        ecg = signal.filtfilt(b_pli50, 1, ecg, axis=1, padtype='even', padlen=1000)
+        ecg = signal.filtfilt(b_pli60, 1, ecg, axis=1, padtype='even', padlen=1000)
+        ecg = signal.filtfilt(b_pli100, 1, ecg, axis=1, padtype='even', padlen=1000)
+        ecg = signal.filtfilt(b_pli120, 1, ecg, axis=1, padtype='even', padlen=1000)
 
-    ecg = ecg[:,1000:-1000]
     ecg = ecg - np.median(ecg,axis=1)[:,None]
     ecg_filtered = ecg.copy()
 
@@ -357,14 +365,6 @@ def get10sec(filename, lpf=100):
     bad_leads = np.zeros(12)
     bad_leads[nonzero_leads[corrs < 0.05]] = 1
     bad_leads[[2,3,4,5]] = 0
-
-    # if np.sum(bad_leads) > 0:
-    #     for i in range(12):
-    #         if bad_leads[i] == 1:
-    #             plt.plot(ecg[i,:] - 1500*i, color='r')
-    #         else:
-    #             plt.plot(ecg[i,:] - 1500*i, color='k')
-    #     plt.show()
 
     ecg[bad_leads == 1] = 0
 
@@ -403,5 +403,5 @@ def get10sec(filename, lpf=100):
 
     ecg_clean = ecg.copy()
 
-    return {'ecg_raw': ecg_raw, 'ecg_filtered': ecg_filtered, 'ecg_clean': ecg_clean, 'poor_quality': poor_quality, 'fs': fs, 'leads': leads, 'pacing_spikes': peaks_pace1, 'age': age, 'sex': sex}
+    return {'ecg_clean': ecg_clean, 'poor_quality': poor_quality, 'fs': fs, 'leads': leads, 'pacing_spikes': peaks_pace1, 'age': age, 'sex': sex}
     

@@ -60,7 +60,7 @@ def getFiducials(ecg, rr_int, fs):
 
     offset_qrs = np.median(keep).astype(int)
 
-    dmin = np.Inf
+    dmin = np.inf
     offset_qrs1 = 610
     for j in range(610, 750, 1):
         dsum = np.sum(np.abs(rms_median[j - 3:j+3]))
@@ -205,7 +205,7 @@ def getFiducials(ecg, rr_int, fs):
 ############################################################################################################
     qrs_offsets_local = np.empty(12, dtype=int)
     for j in range(12):
-        best_window = np.Inf
+        best_window = np.inf
         d1 = np.gradient(ecg[j,:])
         for k in range(offset_qrs - 5, offset_qrs + 5):
             window = np.mean(np.abs(d1[k-5:k+5]))

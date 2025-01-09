@@ -26,7 +26,7 @@ def get_p_area_local(fiducials, fiducials_local, ecg, fs):
     for j in range(12):
         if fiducials[0] > 0:
             dur = int(qrs_onsets[j]-200)
-            p_areas_local[j] = integrate.simpson(np.abs(ecg[j,200:qrs_onsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            p_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,200:qrs_onsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
     return p_areas_local
 
 def get_qrs_area_local(fiducials_local, ecg,fs):
@@ -39,7 +39,7 @@ def get_qrs_area_local(fiducials_local, ecg,fs):
         if dur < 1:
             qrs_areas_local[j] = 0
         else:
-            qrs_areas_local[j] = integrate.simpson(np.abs(ecg[j,qrs_onsets[j]:qrs_offsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            qrs_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,qrs_onsets[j]:qrs_offsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
     return qrs_areas_local
 
 def get_t_area_local(fiducials, fiducials_local, ecg, fs):
@@ -49,7 +49,7 @@ def get_t_area_local(fiducials, fiducials_local, ecg, fs):
     for j in range(12):
         dur = int(fiducials[5]-qrs_offsets[j])
         if dur > 0:
-            t_areas_local[j] = integrate.simpson(np.abs(ecg[j,qrs_offsets[j]:int(fiducials[5])]),np.linspace(0,dur-1,dur)/fs)
+            t_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,qrs_offsets[j]:int(fiducials[5])]),x=np.linspace(0,dur-1,dur)/fs)
     return t_areas_local
 
 def get_st_peak_area_local(fiducials, fiducials_local, ecg, fs):
@@ -60,7 +60,7 @@ def get_st_peak_area_local(fiducials, fiducials_local, ecg, fs):
         tpeaks[j] = np.argmax(np.abs(ecg[j, int(fiducials[4]):int(fiducials[5])])) + int(fiducials[4])
         dur = int(tpeaks[j]-qrs_offsets[j])
         if dur > 1:
-            st_areas_local[j] = integrate.simpson(np.abs(ecg[j,qrs_offsets[j]:tpeaks[j]]), np.linspace(0,dur-1,dur)/fs)
+            st_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,qrs_offsets[j]:tpeaks[j]]), x=np.linspace(0,dur-1,dur)/fs)
     return st_areas_local
 
 def get_p_amps_local(fiducials, ecg):
@@ -158,7 +158,7 @@ def get_q_areas_local(fiducials_local, ecg, fs):
     for j in range(12):
         if q_onsets[j] < q_offsets[j]:
             dur = int(q_offsets[j]-q_onsets[j])
-            q_areas_local[j] = integrate.simpson(np.abs(ecg[j,q_onsets[j]:q_offsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            q_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,q_onsets[j]:q_offsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
         else:
             q_areas_local[j] = 0
     return q_areas_local
@@ -186,7 +186,7 @@ def get_s_areas_local(fiducials_local, ecg, fs):
     for j in range(12):
         if s_onsets[j] < s_offsets[j]:
             dur = int(s_offsets[j]-s_onsets[j])
-            s_areas_local[j] = integrate.simpson(np.abs(ecg[j,s_onsets[j]:s_offsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            s_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,s_onsets[j]:s_offsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
         else:
             s_areas_local[j] = 0
     return s_areas_local
@@ -214,7 +214,7 @@ def get_r_areas_local(fiducials_local, ecg, fs):
     for j in range(12):
         if r_onsets[j] < r_offsets[j]:
             dur = int(r_offsets[j]-r_onsets[j])
-            r_areas_local[j] = integrate.simpson(np.abs(ecg[j,r_onsets[j]:r_offsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            r_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,r_onsets[j]:r_offsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
         else:
             r_areas_local[j] = 0
     return r_areas_local
@@ -242,7 +242,7 @@ def get_rp_areas_local(fiducials_local, ecg, fs):
     for j in range(12):
         if rp_onsets[j] < rp_offsets[j]:
             dur = int(rp_offsets[j]-rp_onsets[j])
-            rp_areas_local[j] = integrate.simpson(np.abs(ecg[j,rp_onsets[j]:rp_offsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            rp_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,rp_onsets[j]:rp_offsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
         else:
             rp_areas_local[j] = 0
     return rp_areas_local
@@ -270,7 +270,7 @@ def get_sp_areas_local(fiducials_local, ecg, fs):
     for j in range(12):
         if sp_onsets[j] < sp_offsets[j]:
             dur = int(sp_offsets[j]-sp_onsets[j])
-            sp_areas_local[j] = integrate.simpson(np.abs(ecg[j,sp_onsets[j]:sp_offsets[j]]), np.linspace(0,dur-1,dur)/fs)
+            sp_areas_local[j] = integrate.simpson(y=np.abs(ecg[j,sp_onsets[j]:sp_offsets[j]]), x=np.linspace(0,dur-1,dur)/fs)
         else:
             sp_areas_local[j] = 0
     return sp_areas_local
@@ -306,16 +306,16 @@ def get_rpsp(fiducials_local):
 def get_p_area_global(fiducials, ecg_rms, fs):
     if fiducials[0] > 0 and fiducials[1] > 0:
         dur = int(fiducials[1]-fiducials[0])
-        return integrate.simpson(ecg_rms[int(fiducials[0]):int(fiducials[1])], np.linspace(0,dur-1,dur)/fs)
+        return integrate.simpson(y=ecg_rms[int(fiducials[0]):int(fiducials[1])], x=np.linspace(0,dur-1,dur)/fs)
     return 0
 
 def get_qrs_area_global(fiducials, ecg_rms, fs):
     dur = int(fiducials[3]-fiducials[2])
-    return integrate.simpson(ecg_rms[int(fiducials[2]):int(fiducials[3])], np.linspace(0,dur-1,dur)/fs)  
+    return integrate.simpson(y=ecg_rms[int(fiducials[2]):int(fiducials[3])], x=np.linspace(0,dur-1,dur)/fs)  
 
 def get_t_area_global(fiducials, ecg_rms, fs):
     dur = int(fiducials[5]-fiducials[4])
-    return integrate.simpson(ecg_rms[int(fiducials[4]):int(fiducials[5])], np.linspace(0,dur-1,dur)/fs)
+    return integrate.simpson(y=ecg_rms[int(fiducials[4]):int(fiducials[5])], x=np.linspace(0,dur-1,dur)/fs)
 
 def get_p_duration(fiducials, fs):
     return (fiducials[1] - fiducials[0]) / fs
@@ -341,7 +341,7 @@ def get_tpte_global(fiducials, ecg_rms, fs):
 def get_st_peak_area_global(fiducials, ecg_rms, fs):
     tpeak = np.argmax(ecg_rms[int(fiducials[4]):int(fiducials[5])]) + int(fiducials[4])
     dur = int(tpeak - fiducials[3])
-    return integrate.simpson(ecg_rms[int(fiducials[3]):tpeak], np.linspace(0,dur-1,dur)/fs)
+    return integrate.simpson(y=ecg_rms[int(fiducials[3]):tpeak], x=np.linspace(0,dur-1,dur)/fs)
 
 def get_st_amp_global(fiducials, ecg_rms, fs):
     st_amp = np.median(ecg_rms[int(fiducials[3]):int(fiducials[3]+0.08*fs)])
