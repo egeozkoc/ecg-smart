@@ -78,9 +78,11 @@ def process_file(args):
     # convert ecg to dictionary
     ecg = {k: v for k, v in ecg.__dict__.items() if v is not None}
 
-    # save ecg to json
-    with open(folder1 + '/' + ecg['id'] + '.json', 'w') as f:
-        json.dump(ecg, f, cls=NumpyEncoder, indent=4)
+    np.save(folder1 + '/' + ecg['id'] + '.npy', ecg)
+
+    # # save ecg to json
+    # with open(folder1 + '/' + ecg['id'] + '.json', 'w') as f:
+    #     json.dump(ecg, f, cls=NumpyEncoder, indent=4)
 
 def ecg2csv(filenames):
     df_all = pd.DataFrame()
