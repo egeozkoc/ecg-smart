@@ -67,7 +67,8 @@ class ECG:
         getFeatures(self)
 
 
-def process_file(filename):
+def process_file(args):
+    filename, folder1 = args
     ecg = ECG(filename)
     ecg.processRawData()
     ecg.processMedian()
@@ -79,7 +80,7 @@ def process_file(filename):
 
     # save ecg to json
     with open(folder1 + '/' + ecg['id'] + '.json', 'w') as f:
-        json.dump(ecg1, f, cls=NumpyEncoder, indent=4)
+        json.dump(ecg, f, cls=NumpyEncoder, indent=4)
 
 def ecg2csv(filenames):
     df_all = pd.DataFrame()
@@ -107,19 +108,18 @@ if __name__ == '__main__':
     print('Select folder containing raw ECGs')
     folder = askdirectory()
     print('Select folder to save processed ECGs')
-    global folder1
     folder1 = askdirectory()
 
-    filenames = glob(folder+'/*.xml') + glob(folder+'/*.hea') + glob(folder+'/*.json') + glob(folder+'/*/*.hea')
+    filenames = glob(folder+'/**/*.xml', recursive=True) + glob(folder+'/**/*.hea', recursive=True) + glob(folder+'/**/*.json', recursive=True)
     # ask user if they want to run in parallel
     parallel = input('Run in parallel? (y/n) ')
     parallel = parallel.lower()
     if parallel == 'y':
         pool = multiprocessing.Pool(processes = multiprocessing.cpu_count()-1)
-        pool.map(process_file, filenames)
+        pool.map(process_file, [(filename, folder1) for filename in filenames])
     else:
         for filename in filenames:
-            process_file(filename)
+            process_file((filename, folder1))
 
     # filenames1 = glob('../ecgs100/*.npy')
     # # poor_quality2csv(filenames1)
