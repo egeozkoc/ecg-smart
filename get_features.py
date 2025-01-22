@@ -1,13 +1,10 @@
 # calculate features from the median beats
 
 import numpy as np
-from glob import glob
 from scipy import signal, integrate
 from sklearn.decomposition import PCA
 from scipy.spatial.distance import pdist, squareform, cdist, euclidean
-import matplotlib.pyplot as plt
 import itertools
-import pandas as pd
 
 # Inverse Dower Transform V1-V6 I II
 DT = np.array([[-0.172, -0.074, 0.122, 0.231, 0.239, 0.194, 0.156, -0.010], 

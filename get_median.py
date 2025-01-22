@@ -1,13 +1,7 @@
 # Calculate median beats and rr intervals
 
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy import fft,signal, io
-from scipy.misc import derivative
-from glob import glob
-import multiprocessing
-
-use_corr = False
+from scipy import signal
 
 def getTemplateBeat(beats):
     beats1 = np.empty((beats.shape[0], beats.shape[1], 200))
@@ -17,10 +11,7 @@ def getTemplateBeat(beats):
             beats1[i, j, :] = beats[i, j, peak - 100:peak + 100]
     
     beats1 -= np.median(beats1[:,:,0:75],axis=2)[:,:,None]
-    if use_corr:
-        corrs = np.ones([12, beats1.shape[0], beats1.shape[0]])
-    else:
-        corrs = np.zeros([12, beats1.shape[0], beats1.shape[0]])
+    corrs = np.zeros([12, beats1.shape[0], beats1.shape[0]])
     best_beat = np.empty(12, dtype=int)
 
 
@@ -41,44 +32,24 @@ def getTemplateBeat(beats):
                 beat1_stds = np.std(beat1, axis=1)
                 beat2_stds = np.std(beat2, axis=1)
                 if np.any(beat1_stds == 0) or np.any(beat2_stds == 0):
-                    if use_corr:
-                        corrs[i,j,k] = 0
-                        corrs[i,k,j] = 0
-                    else:
-                        corrs[i,j,k] = 1000
-                        corrs[i,k,j] = 1000
+                    corrs[i,j,k] = 1000
+                    corrs[i,k,j] = 1000
                 else:
-                    if use_corr:
-                        corrs[i,j,k] = np.corrcoef(beats1[j,i,:], beats1[k,i,:])[0,1]
-                    else:
-                        mag = np.sqrt(np.linalg.norm(beats1[j,i,:])**2 + np.linalg.norm(beats1[k,i,:])**2)
-
-                        corrs[i,j,k] = np.linalg.norm(beats1[j,i,:] - beats1[k,i,:]) / mags[i]
+                    corrs[i,j,k] = np.linalg.norm(beats1[j,i,:] - beats1[k,i,:]) / mags[i]
                     corrs[i,k,j] = corrs[i,j,k]
-        
-        if use_corr:
-            best_beat[i] = np.argmax(np.sum(corrs[i,:,:], axis=-1))
-        else:
-            best_beat[i] = np.argmin(np.sum(corrs[i,:,:], axis=-1))
+        best_beat[i] = np.argmin(np.sum(corrs[i,:,:], axis=-1))
 
     best_corrs = np.zeros([12,beats1.shape[0]])
     for i in range(12):
         best_corrs[i] = corrs[i,best_beat[i],:]
     
-    if use_corr:
-        best_overall_beat = np.argmax(np.sum(best_corrs, axis=0))
-    else:
-        best_overall_beat = np.argmin(np.sum(best_corrs, axis=0))
+    best_overall_beat = np.argmin(np.sum(best_corrs, axis=0))
 
     return best_overall_beat
 
 def getValidBeats(beats, template_beat):
     beats = beats[:,:,200:400]
-    if use_corr:
-        corrs = np.ones([12, beats.shape[0], beats.shape[0]])
-    else:
-        corrs = np.zeros([12, beats.shape[0], beats.shape[0]])
-    
+    corrs = np.zeros([12, beats.shape[0], beats.shape[0]])
     mags = np.linalg.norm(template_beat, axis=1)
 
     best_beat = np.empty(12, dtype=int)
@@ -92,34 +63,18 @@ def getValidBeats(beats, template_beat):
                 beat1_stds = np.std(beat1, axis=1)
                 beat2_stds = np.std(beat2, axis=1)
                 if np.any(beat1_stds == 0) or np.any(beat2_stds == 0):
-                    if use_corr:
-                        corrs[i,j,k] = 0
-                        corrs[i,k,j] = 0
-                    else:
-                        corrs[i,j,k] = 1000
-                        corrs[i,k,j] = 1000
+                    corrs[i,j,k] = 1000
+                    corrs[i,k,j] = 1000
                 else:
-                    if use_corr:
-                        corrs[i,j,k] = np.corrcoef(beats[j,i,:], beats[k,i,:])[0,1]
-                    else:
-                        mag = np.sqrt(np.linalg.norm(beats[j,i,:])**2 + np.linalg.norm(beats[k,i,:])**2)
-                        corrs[i,j,k] = np.linalg.norm(beats[j,i,:] - beats[k,i,:]) / mags[i]
+                    corrs[i,j,k] = np.linalg.norm(beats[j,i,:] - beats[k,i,:]) / mags[i]
                     corrs[i,k,j] = corrs[i,j,k]
-
-        if use_corr:
-            best_beat[i] = np.argmax(np.sum(corrs[i,:,:], axis=-1))
-        else:
-            best_beat[i] = np.argmin(np.sum(corrs[i,:,:], axis=-1))
+        best_beat[i] = np.argmin(np.sum(corrs[i,:,:], axis=-1))
 
     best_corrs = np.zeros([12,beats.shape[0]])
     for i in range(12):
         best_corrs[i] = corrs[i,best_beat[i],:]
-
-    if use_corr:
-        best_corrs = best_corrs > 0.8
-    else:
-        best_corrs = best_corrs < .8
-
+    
+    best_corrs = best_corrs < .8
     return best_corrs
        
 def getMedianBeat(ecg):    
@@ -134,12 +89,8 @@ def getMedianBeat(ecg):
 # Get R-Peaks
 ############################################################################################################
     # Apply QRS Filter
-    # ecg = np.clip(ecg, -2500, 2500)
     b_qrs, a_qrs = signal.butter(2, [8, 40], btype='bandpass', fs=500)
-    ecg = np.concatenate((np.flip(ecg[:,:1000],axis=1), ecg, np.flip(ecg[:,-1000:],axis=1)), axis=1)
-    ecg_qrs = signal.filtfilt(b_qrs, a_qrs, ecg, axis=1)
-    ecg_qrs = ecg_qrs[:,1000:-1000]
-    ecg = ecg[:,1000:-1000]
+    ecg_qrs = signal.filtfilt(b_qrs, a_qrs, ecg, axis=1, padtype='even', padlen=1000)
 
     rms_ecg = np.sqrt(np.sum(ecg**2,axis=0)) / np.sqrt(12)
     rms_qrs = np.sqrt(np.sum(ecg_qrs**2,axis=0)) / np.sqrt(12)
