@@ -1,16 +1,12 @@
 import numpy as np
-import pandas as pd
 import xmltodict
-from glob import glob
 import scipy.io as io
 import scipy.signal as signal
-import matplotlib.pyplot as plt
-import multiprocessing
 import json
 import base64
 import struct
-from tkinter.filedialog import askopenfilename
 import wfdb
+from sierraecg import read_file
 
 def decode_ekg_muse_to_array(raw_wave, downsample = 1):
     """
@@ -44,14 +40,25 @@ def get10sec(filename, lpf=100):
         # Philips XML
         if 'restingecgdata' in dic:
             fs = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['samplingrate'])
-            raw_ecg = dic['restingecgdata']['waveforms']['parsedwaveforms']['#text'].split()
+
+            # XLI encoding
+            if dic['restingecgdata']['waveforms']['parsedwaveforms']['@dataencoding'] == 'Base64':
+                f = read_file(filename)
+                ecg = np.empty([12, 5000], dtype=float)
+                for i in range(12):
+                    ecg[i, :] = f.leads[i].samples[0:5000]
+            
+            # No encoding
+            else:
+                raw_ecg = dic['restingecgdata']['waveforms']['parsedwaveforms']['#text'].split()
+                ecg = np.empty([len(leads), 10 * fs])
+                for i in range(len(leads)):
+                    ecg[i, :] = raw_ecg[i * fs * 11:i * fs * 11 + fs * 10]
+
             if 'signalresolution' in dic['restingecgdata']['dataacquisition']['signalcharacteristics']:
                 signal_res = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['signalresolution'])
             else:
                 signal_res = int(dic['restingecgdata']['dataacquisition']['signalcharacteristics']['resolution'])
-            ecg = np.empty([len(leads), 10 * fs])
-            for i in range(len(leads)):
-                ecg[i, :] = raw_ecg[i * fs * 11:i * fs * 11 + fs * 10]
             ecg *= signal_res # scale ECG signal to uV
 
             try:
@@ -61,7 +68,7 @@ def get10sec(filename, lpf=100):
                 age = 60
             try:
                 sex = dic['restingecgdata']['patient']['generalpatientdata']['sex'].lower()
-                if sex == 'female':
+                if sex == 'female' or sex == 'f':
                     sex = 1
                 else:
                     sex = 0
