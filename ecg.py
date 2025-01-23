@@ -9,6 +9,7 @@ import numpy as np
 import multiprocessing
 import pandas as pd
 import json
+import os
 
 from get_10sec import get10sec
 from get_median import getMedianBeat
@@ -77,31 +78,20 @@ def process_file(args):
 
     # convert ecg to dictionary
     ecg = {k: v for k, v in ecg.__dict__.items() if v is not None}
-
     np.save(folder1 + '/' + ecg['id'] + '.npy', ecg)
 
-    # # save ecg to json
-    # with open(folder1 + '/' + ecg['id'] + '.json', 'w') as f:
-    #     json.dump(ecg, f, cls=NumpyEncoder, indent=4)
-
-def ecg2csv(filenames):
+def ecg2csv(folder1):
+    folder2 = folder1 + '/../results'
+    os.makedirs(folder2, exist_ok=True)
+    filenames = glob(folder1 + '/*.npy')
     df_all = pd.DataFrame()
     for filename in filenames:
         print(filename)
         ecg = np.load(filename, allow_pickle=True).item()
-        df_pt = pd.DataFrame(ecg.features, index=[ecg.id])
+        df_pt = pd.DataFrame(ecg['features'], index=[ecg['id']])
         df_all = pd.concat([df_all, df_pt])
 
-    df_all.to_csv('features100.csv')
-
-def poor_quality2csv(filenames):
-    df = pd.read_csv('../outcomes/outcomes.csv')
-    for filename in filenames:
-        ecg = np.load(filename, allow_pickle=True).item()
-        df.loc[df['id'] == ecg.id, 'poor_quality100'] = int(ecg.poor_quality)
-    df.to_csv('../outcomes/outcomes.csv', index=False)
-    
-
+    df_all.to_csv(folder2 + '/features.csv')
 
 # main
 if __name__ == '__main__':
@@ -109,8 +99,9 @@ if __name__ == '__main__':
     # browse to get folders
     print('Select folder containing raw ECGs')
     folder = askdirectory()
-    print('Select folder to save processed ECGs')
-    folder1 = askdirectory()
+    # create a folder at level above folder containing raw ECGs
+    folder1 = folder + '/../processed_ecgs'
+    os.makedirs(folder1, exist_ok=True)
 
     filenames = glob(folder+'/**/*.xml', recursive=True) + glob(folder+'/**/*.hea', recursive=True) + glob(folder+'/**/*.json', recursive=True)
     # ask user if they want to run in parallel
@@ -123,7 +114,5 @@ if __name__ == '__main__':
         for filename in filenames:
             process_file((filename, folder1))
 
-    # filenames1 = glob('../ecgs100/*.npy')
-    # # poor_quality2csv(filenames1)
-    # ecg2csv(filenames1)
+    ecg2csv(folder1)
     
