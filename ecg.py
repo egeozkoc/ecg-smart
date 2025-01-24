@@ -15,6 +15,8 @@ from get_10sec import get10sec
 from get_median import getMedianBeat
 from get_fiducials import getFiducials
 from get_features import getFeatures
+from get_predictions import getPredictions
+
 from tkinter.filedialog import askdirectory
 
 class NumpyEncoder(json.JSONEncoder):
@@ -67,7 +69,6 @@ class ECG:
     def processFeatures(self):
         getFeatures(self)
 
-
 def process_file(args):
     filename, folder1 = args
     ecg = ECG(filename)
@@ -115,4 +116,5 @@ if __name__ == '__main__':
             process_file((filename, folder1))
 
     ecg2csv(folder1)
+    getPredictions(folder1 + '/../results/features.csv', folder1)
     
