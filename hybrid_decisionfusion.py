@@ -5,36 +5,14 @@ import pandas as pd
 import numpy as np
 import pickle
 from sklearn.preprocessing import Normalizer, MinMaxScaler
-from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
-from sklearn.compose import ColumnTransformer
-from sklearn.model_selection import StratifiedKFold
-from sklearn.pipeline import Pipeline
-from sklearn.feature_selection import SelectKBest, chi2, RFE
-from sklearn.feature_selection import SelectFromModel
-
-
 from sklearn.preprocessing import StandardScaler
-from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout,BatchNormalization, LeakyReLU, Input
-from keras.models import Model
-from keras.utils import to_categorical
-from keras.optimizers import Adam
-from keras.regularizers import l2
-from keras.callbacks import EarlyStopping
-from keras.optimizers.schedules import ExponentialDecay
-from keras.callbacks import ReduceLROnPlateau
 
-import tensorflow as tf
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from sklearn.ensemble import RandomForestClassifier
-
-
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-from sklearn.neighbors import KNeighborsClassifier
 
 from sklearn.metrics import roc_curve, auc, precision_recall_curve, confusion_matrix, accuracy_score, roc_auc_score, average_precision_score, f1_score
 
@@ -45,7 +23,6 @@ seed(42)
 from tensorflow import random
 random.set_seed(42)
 
-from joblib import dump, load
 
 import torch
 import numpy as np
@@ -444,6 +421,6 @@ with torch.no_grad():
   spe = tn / (tn + fp)
   ppv = tp / (tp + fp)
   npv = tn / (tn + fn)
-  print(f"Validation Acc: {acc}")
-  print(f"Validation AUC: {auc_test}, Validation AP: {ap_test}")
+  print(f"Test Acc: {acc}")
+  print(f"Test AUC: {auc_test}, Test AP: {ap_test}")
   print(f"Thres: {max_thres}, Sen: {sen}, Spe: {spe}, PPV: {ppv}, NPV: {npv}, F1: {f1}")
