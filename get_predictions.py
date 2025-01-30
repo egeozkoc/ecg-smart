@@ -13,6 +13,7 @@ def get_data(path, device):
     ecg = ecg[:,150:-50]
     ecg = signal.resample(ecg, 200, axis=1)
     max_val = np.max(np.abs(ecg), axis=1)
+    max_val[max_val == 0] = 1
     ecg = ecg / max_val[:, None]
     ecg = torch.tensor(ecg).float().to(device)
     ecg = ecg.unsqueeze(0).unsqueeze(0)
@@ -23,29 +24,20 @@ def get_data(path, device):
 def getPredictions(features_filename, ecg_folder):
     # RF predictions
     features = pd.read_csv(features_filename, index_col=0)
-    selected_features = np.load('models/selected_features.npy')
-    idx = np.arange(417)[selected_features == 1]
-    features_148 = features.iloc[:, idx]
-    ids = features.index
+    ids = features.index.to_list()
     features = features.to_numpy()
-    features_148 = features_148.to_numpy()
 
-    rf148_acs = joblib.load('models/rf_100hz_148_features_acs.pkl')
-    rf148_omi = joblib.load('models/rf_100hz_148_features_omi.pkl')
-    rf_acs = joblib.load('models/rf_100hz_all_features_acs.pkl')
-    rf_omi = joblib.load('models/rf_100hz_all_features_omi.pkl')
+    rf_acs = joblib.load('models/rf_all_acs.pkl')
+    # rf_omi = joblib.load('models/rf_all_omi.pkl')
 
     predictions = pd.DataFrame()
     predictions['id'] = ids
-    predictions['acs_148'] = rf148_acs.predict_proba(features_148)[:, 1]
-    predictions['omi_148'] = rf148_omi.predict_proba(features_148)[:, 1]
-    predictions['acs'] = rf_acs.predict_proba(features)[:, 1]
-    predictions['omi'] = rf_omi.predict_proba(features)[:, 1]
+    predictions['rf_acs'] = rf_acs.predict_proba(features)[:, 1]
+    # predictions['rf_omi'] = rf_omi.predict_proba(features)[:, 1]
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-    ecgsmartnet_omi = torch.load('models/ecgsmartnet_omi.pt', weights_only=False).to(device)
-    ecgsmartnet_omi.eval()
+    ecgsmartnet_acs = torch.load('models/ecgsmartnet_acs_2025-01-27-18-39-20.pt', weights_only=False).to(device)
+    ecgsmartnet_acs.eval()
 
     filenames = glob(ecg_folder + '/*.npy')
     for filename in filenames:
@@ -53,11 +45,15 @@ def getPredictions(features_filename, ecg_folder):
 
         # get prediction
         with torch.no_grad():
-            output = ecgsmartnet_omi(ecg)
+            output = ecgsmartnet_acs(ecg)
             output = torch.softmax(output, dim=-1)
             output = output.cpu().numpy()[0,-1]
             id = filename.split('\\')[-1].split('.')[0]
-            predictions.loc[predictions['id'] == id, 'ecgsmartnet_omi'] = output
+            predictions.loc[predictions['id'] == id, 'ecgsmartnet_acs'] = output
+
+    logreg_acs = joblib.load('models/logreg_acs.pkl')
+    fusion_input = predictions[['ecgsmartnet_acs', 'rf_acs']].to_numpy()
+    predictions['fusion_acs'] = logreg_acs.predict_proba(fusion_input)[:, 1]
     
     predictions_filename = features_filename.replace('features.csv', 'predictions.csv')
     predictions.to_csv(predictions_filename, index = False)

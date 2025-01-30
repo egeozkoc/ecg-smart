@@ -103,18 +103,17 @@ if __name__ == '__main__':
     # select a folder to save processed ECGs
     print('Select folder to save processed ECGs')
     folder1 = askdirectory()
-    os.makedirs(folder1, exist_ok=True)
 
-    # filenames = glob(folder+'/**/*.xml', recursive=True) + glob(folder+'/**/*.hea', recursive=True) + glob(folder+'/**/*.json', recursive=True)
-    # # ask user if they want to run in parallel
-    # parallel = input('Run in parallel? (y/n) ')
-    # parallel = parallel.lower()
-    # if parallel == 'y':
-    #     pool = multiprocessing.Pool(processes = multiprocessing.cpu_count()-1)
-    #     pool.map(process_file, [(filename, folder1) for filename in filenames])
-    # else:
-    #     for filename in filenames:
-    #         process_file((filename, folder1))
+    filenames = glob(folder+'/**/*.xml', recursive=True) + glob(folder+'/**/*.hea', recursive=True) + glob(folder+'/**/*.json', recursive=True)
+    # ask user if they want to run in parallel
+    parallel = input('Run in parallel? (y/n) ')
+    parallel = parallel.lower()
+    if parallel == 'y':
+        pool = multiprocessing.Pool(processes = multiprocessing.cpu_count()-1)
+        pool.map(process_file, [(filename, folder1) for filename in filenames])
+    else:
+        for filename in filenames:
+            process_file((filename, folder1))
 
     ecg2csv(folder1)
     # getPredictions(folder1 + '/../results/features.csv', folder1)
