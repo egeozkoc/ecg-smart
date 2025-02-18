@@ -34,8 +34,9 @@ class NumpyEncoder(json.JSONEncoder):
 
 class ECG:
     def __init__(self, filename):
+        filename = filename.replace('\\', '/')
         self.filename = filename
-        self.id = filename.split('\\')[-1].split('.')[0]
+        self.id = filename.split('/')[-1].split('.')[0]
         self.waveforms = {'ecg_10sec_clean': None, 'ecg_median': None, 'beats': None}
         self.fiducials = {'local': None, 'global': None, 'pacing_spikes': None, 'r_peaks': None}
         self.features = {}
