@@ -264,7 +264,6 @@ def get10sec(filename, lpf=100):
         sig_len = int(ecg.shape[1] / fs * 500)
         ecg = signal.resample(ecg, sig_len, axis=1)
         fs = 500
-    ecg_raw = ecg.copy()
 
 ############################################################################################################
 # Remove Baseline Wander
@@ -340,7 +339,6 @@ def get10sec(filename, lpf=100):
         ecg = signal.filtfilt(b_pli120, 1, ecg, axis=1, padtype='even', padlen=1000)
 
     ecg = ecg - np.median(ecg,axis=1)[:,None]
-    ecg_filtered = ecg.copy()
 
 ############################################################################################################
 # Remove artifacts within lead

@@ -44,8 +44,8 @@ class ECG:
         self.fs = None
         self.poor_quality = None
 
-    def processRawData(self):
-        data = get10sec(self.filename, 100)
+    def processRawData(self, lpf):
+        data = get10sec(self.filename, lpf)
         self.waveforms['ecg_10sec_clean'] = data['ecg_clean']
         self.fs = data['fs']
         self.leads = data['leads']
@@ -70,9 +70,9 @@ class ECG:
         getFeatures(self)
 
 def process_file(args):
-    filename, folder1 = args
+    filename, folder1, lpf = args
     ecg = ECG(filename)
-    ecg.processRawData()
+    ecg.processRawData(lpf)
     ecg.processMedian()
     ecg.segmentMedian()
     ecg.processFeatures()
@@ -103,6 +103,15 @@ if __name__ == '__main__':
     # select a folder to save processed ECGs
     print('Select folder to save processed ECGs')
     folder1 = askdirectory()
+    print('Choose Low Pass Filter: [1] 100 Hz, [2] 150 Hz (type 1 or 2)')
+    lpf = int(input())
+    if lpf == 1:
+        lpf = 100
+    elif lpf == 2:
+        lpf = 150
+    else:
+        lpf = 100
+    print('You chose Low Pass Filter: ', lpf)
 
     filenames = glob(folder+'/**/*.xml', recursive=True) + glob(folder+'/**/*.hea', recursive=True) + glob(folder+'/**/*.json', recursive=True)
     # ask user if they want to run in parallel
@@ -110,10 +119,10 @@ if __name__ == '__main__':
     parallel = parallel.lower()
     if parallel == 'y':
         pool = multiprocessing.Pool(processes = multiprocessing.cpu_count()-1)
-        pool.map(process_file, [(filename, folder1) for filename in filenames])
+        pool.map(process_file, [(filename, folder1, lpf) for filename in filenames])
     else:
         for filename in filenames:
-            process_file((filename, folder1))
+            process_file((filename, folder1, lpf))
 
     ecg2csv(folder1)
     # getPredictions(folder1 + '/../results/features.csv', folder1)
