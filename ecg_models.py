@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
+import torchvision.models as models
 
+# ECG-SMART-NET Architecture ###########################################################
 class ResidualBlock2D(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1, kernel=3):
         super(ResidualBlock2D,self).__init__()
@@ -88,10 +90,10 @@ class ECGSMARTNET(nn.Module):
         if self.dropout:
             out = self.do(out)
 
-        return out
-    
-#########################################################################################
+        return out  
+########################################################################################
 
+# Temporal ResNet-18 Architecture ######################################################
 class Temporal(nn.Module):
     def __init__(self, num_classes=2):
         super(Temporal, self).__init__()
@@ -141,73 +143,16 @@ class Temporal(nn.Module):
         out = self.fc(out)
 
         return out
+########################################################################################
 
-#########################################################################################
-
-class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, mp):
-        super(ConvBlock, self).__init__()
-
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=(1,kernel_size), stride=(1,1), padding=(0, kernel_size//2))
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=(1,mp), stride=(1,mp), padding=(0, int(mp/2 -1)))
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        out = self.maxpool(out)
-        return out
-
-class Mayo(nn.Module):
+# Pretrained ResNet-18 Architecture ####################################################
+class ResNet18(nn.Module):
     def __init__(self, num_classes=2):
-        super(Mayo, self).__init__()
+        super(ResNet18, self).__init__()
+        self.model = models.resnet18(weights='DEFAULT')
+        self.model.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+        self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
 
-        self.convblock1 = ConvBlock(in_channels=1, out_channels=16, kernel_size=5, mp=2)
-        self.convblock2 = ConvBlock(in_channels=16, out_channels=16, kernel_size=5, mp=2)
-        self.convblock3 = ConvBlock(in_channels=16, out_channels=32, kernel_size=5, mp=4)
-        self.convblock4 = ConvBlock(in_channels=32, out_channels=32, kernel_size=3, mp=2)
-        self.convblock5 = ConvBlock(in_channels=32, out_channels=64, kernel_size=3, mp=2)
-        self.convblock6 = ConvBlock(in_channels=64, out_channels=64, kernel_size=3, mp=4)
-
-        self.conv1 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(12,1), stride=(1,1), padding=(0,0))
-        self.bn1 = nn.BatchNorm2d(64)
-        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
-
-        self.fc1 = nn.Linear(in_features=64, out_features=64)
-        self.bn2 = nn.BatchNorm1d(64)
-        self.fc2 = nn.Linear(in_features=64, out_features=32)
-        self.bn3 = nn.BatchNorm1d(32)
-        self.dropout = nn.Dropout(p=0.2)
-        self.fc3 = nn.Linear(in_features=32, out_features=num_classes)
-        
     def forward(self, x):
-        out = self.convblock1(x)
-        out = self.convblock2(out)
-        out = self.convblock3(out)
-        out = self.convblock4(out)
-        out = self.convblock5(out)
-        out = self.convblock6(out)
-
-        out = self.conv1(out)
-        out = self.bn1(out)
-        out = torch.relu(out)
-        out = self.avgpool(out)
-        out = torch.flatten(out, 1)
-
-        out = self.fc1(out)
-        out = self.bn2(out)
-        out = torch.relu(out)
-        out = self.dropout(out)
-
-        out = self.fc2(out)
-        out = self.bn3(out)
-        out = torch.relu(out)
-        out = self.dropout(out)
-
-        out = self.fc3(out)
-
-        return out
-
-#########################################################################################
+        return self.model(x)
+########################################################################################
