@@ -356,7 +356,9 @@ def get_t_amp_global(fiducials, ecg_rms):
     return np.max(ecg_rms[int(fiducials[4]):int(fiducials[5])])
 
 def get_t_qrs_ratio_global(fiducials, ecg_rms):
-    return get_t_amp_global(fiducials, ecg_rms) / get_qrs_amp_global(fiducials, ecg_rms)
+    if get_qrs_amp_global(fiducials, ecg_rms) != 0:
+        return get_t_amp_global(fiducials, ecg_rms) / get_qrs_amp_global(fiducials, ecg_rms)
+    return 0
 
 def get_hr_global(rrint, fs):
     if rrint > 0:
@@ -412,47 +414,60 @@ def get_vat_global(ecg_rms, fiducials, fs):
 
 def get_pca(ecg): # just plug in the data to use (can be QRS, T, ST, STT, TpTe)
     ecg = ecg[[0,1,6,7,8,9,10,11],:]
+    if np.var(ecg) == 0:
+        return 0
     if ecg.shape[1] >= 8:
         pca = PCA(n_components=2)
         pca.fit(ecg.T)
         vr = pca.explained_variance_
-        return vr[1]/vr[0]
-    else:
-        return 0
+        if vr[0] != 0:
+            return vr[1]/vr[0]
+    return 0
 
 def get_ndpv(ecg): # plug in data to use (QRS or STT)
     ecg = ecg[[0,1,6,7,8,9,10,11],:]
+    if np.var(ecg) == 0:
+        return 0
     if ecg.shape[1] >= 8:
         pca = PCA(n_components=8)
         pca.fit(ecg.T)
         vr = pca.explained_variance_
-        return np.sum(vr[3:])/np.sum(vr)
-    else:
-        return 0
+        if np.sum(vr)!= 0:
+            return np.sum(vr[3:])/np.sum(vr)
+    return 0
 
 def get_rel_psds(ecg, fs): # use 10-second data
     f, psd = signal.welch(ecg, fs=fs, nperseg=int(1.25*fs))
 
     freq_idx = np.where((f >= 0.5) & (f < 10))[0]
-    low_psd = np.trapz(psd[:,freq_idx], f[freq_idx], axis=1)
+    low_psd = np.trapezoid(psd[:,freq_idx], f[freq_idx], axis=1)
 
     freq_idx = np.where((f >= 10) & (f < 50))[0]
-    medium_psd = np.trapz(psd[:,freq_idx], f[freq_idx], axis=1)
+    medium_psd = np.trapezoid(psd[:,freq_idx], f[freq_idx], axis=1)
 
     freq_idx = np.where((f >= 50) & (f < 100))[0]
-    high_psd = np.trapz(psd[:,freq_idx], f[freq_idx], axis=1)
+    high_psd = np.trapezoid(psd[:,freq_idx], f[freq_idx], axis=1)
 
     freq_idx = np.where((f >= 0.5) & (f < 100))[0]
-    total_psd = np.trapz(psd[:,freq_idx], f[freq_idx], axis=1)
+    total_psd = np.trapezoid(psd[:,freq_idx], f[freq_idx], axis=1)
 
     total_psd[total_psd==0] = 1
     low_psd /= total_psd
     medium_psd /= total_psd
     high_psd /= total_psd
 
-    low_psd = np.mean(low_psd[low_psd > 0])
-    medium_psd = np.mean(medium_psd[medium_psd > 0])
-    high_psd = np.mean(high_psd[high_psd > 0])
+    if np.sum(low_psd) == 0:
+        low_psd = 0
+    else:
+        low_psd = np.mean(low_psd[low_psd > 0])
+    if np.sum(medium_psd) == 0:
+        medium_psd = 0
+    else:
+        medium_psd = np.mean(medium_psd[medium_psd > 0])
+    if np.sum(high_psd) == 0:
+        high_psd = 0
+    else:
+        high_psd = np.mean(high_psd[high_psd > 0])
 
     return low_psd, medium_psd, high_psd
 
@@ -494,10 +509,23 @@ def get_qrs_peak_features(vcg, rpeak):
     qrs_peak_y = vcg[1,rpeak]
     qrs_peak_z = vcg[2,rpeak]
 
-    qrs_elev = np.rad2deg(np.arctan(qrs_peak_z/qrs_peak_x)) # z/x
-    qrs_elev1 = np.rad2deg(np.arctan(qrs_peak_z/np.sqrt(np.square(qrs_peak_x) + np.square(qrs_peak_y))))
-    qrs_azim = np.rad2deg(np.arctan(qrs_peak_y/qrs_peak_x)) # y/x
-    qrs_zen = np.rad2deg(np.arctan(qrs_peak_z/qrs_peak_y)) # z/y
+    if qrs_peak_x == 0:
+        qrs_elev = 0
+        qrs_azim = 0
+    else:
+        qrs_elev = np.rad2deg(np.arctan(qrs_peak_z/qrs_peak_x)) # z/x
+        qrs_azim = np.rad2deg(np.arctan(qrs_peak_y/qrs_peak_x)) # y/x
+
+    if qrs_peak_y == 0:
+        qrs_zen = 0
+    else:
+        qrs_zen = np.rad2deg(np.arctan(qrs_peak_z/qrs_peak_y)) # z/y
+
+    if qrs_peak_x == 0 and qrs_peak_y == 0:
+        qrs_elev1 = 0
+    else:
+        qrs_elev1 = np.rad2deg(np.arctan(qrs_peak_z/np.sqrt(np.square(qrs_peak_x) + np.square(qrs_peak_y))))
+    
     qrs_mag = np.sqrt(np.square(qrs_peak_x) + np.square(qrs_peak_y) + np.square(qrs_peak_z))
 
     return qrs_elev, qrs_elev1, qrs_azim, qrs_zen, qrs_mag
@@ -509,10 +537,23 @@ def get_t_peak_features(vcg, tpeak):
     t_peak_y = vcg[1,tpeak]
     t_peak_z = vcg[2,tpeak]
 
-    t_elev = np.rad2deg(np.arctan(t_peak_z/t_peak_x)) # z/x
-    t_elev1 = np.rad2deg(np.arctan(t_peak_z/np.sqrt(np.square(t_peak_x) + np.square(t_peak_y))))
-    t_azim = np.rad2deg(np.arctan(t_peak_y/t_peak_x)) # y/x
-    t_zen = np.rad2deg(np.arctan(t_peak_z/t_peak_y)) # z/y
+    if t_peak_x == 0:
+        t_elev = 0
+        t_azim = 0
+    else:
+        t_elev = np.rad2deg(np.arctan(t_peak_z/t_peak_x)) # z/x
+        t_azim = np.rad2deg(np.arctan(t_peak_y/t_peak_x)) # y/x
+    
+    if t_peak_y == 0:
+        t_zen = 0
+    else:
+        t_zen = np.rad2deg(np.arctan(t_peak_z/t_peak_y)) # z/y
+    
+    if t_peak_x == 0 and t_peak_y == 0:
+        t_elev1 = 0
+    else:
+        t_elev1 = np.rad2deg(np.arctan(t_peak_z/np.sqrt(np.square(t_peak_x) + np.square(t_peak_y))))
+    
     t_mag = np.sqrt(np.square(t_peak_x) + np.square(t_peak_y) + np.square(t_peak_z))
 
     return t_elev, t_elev1, t_azim, t_zen, t_mag
@@ -522,10 +563,24 @@ def get_qrs_avg_features(vcg, fiducials):
     qrs_avg_y = np.mean(vcg[1,int(fiducials[2]):int(fiducials[3])])
     qrs_avg_z = np.mean(vcg[2,int(fiducials[2]):int(fiducials[3])])
 
-    qrs_avg_elev = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_x)) # z/x
-    qrs_avg_elev1 = np.rad2deg(np.arctan(qrs_avg_z/np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y))))
-    qrs_avg_azim = np.rad2deg(np.arctan(qrs_avg_y/qrs_avg_x)) # y/x
-    qrs_avg_zen = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_y))  # z/y
+    if qrs_avg_x == 0:
+        qrs_avg_elev = 0
+        qrs_avg_azim = 0
+    else:
+        qrs_avg_elev = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_x)) # z/x
+        qrs_avg_azim = np.rad2deg(np.arctan(qrs_avg_y/qrs_avg_x)) # y/x
+    
+    if qrs_avg_y == 0:
+        qrs_avg_zen = 0
+    else:
+        qrs_avg_zen = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_y))  # z/y
+    
+
+    if qrs_avg_x == 0 and qrs_avg_y == 0:
+        qrs_avg_elev1 = 0
+    else:
+        qrs_avg_elev1 = np.rad2deg(np.arctan(qrs_avg_z/np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y))))
+    
     qrs_avg_mag = np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y) + np.square(qrs_avg_z))
 
     return qrs_avg_elev, qrs_avg_elev1, qrs_avg_azim, qrs_avg_zen, qrs_avg_mag
@@ -535,10 +590,23 @@ def get_iqrs_avg_features(vcg, fiducials, fs):
     qrs_avg_y = np.mean(vcg[1,int(fiducials[2]):int(fiducials[2]) + int(0.04*fs)])
     qrs_avg_z = np.mean(vcg[2,int(fiducials[2]):int(fiducials[2]) + int(0.04*fs)])
 
-    qrs_avg_elev = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_x)) # z/x
-    qrs_avg_elev1 = np.rad2deg(np.arctan(qrs_avg_z/np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y))))
-    qrs_avg_azim = np.rad2deg(np.arctan(qrs_avg_y/qrs_avg_x)) # y/x
-    qrs_avg_zen = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_y))  # z/y
+    if qrs_avg_x == 0:
+        qrs_avg_elev = 0
+        qrs_avg_azim = 0
+    else:
+        qrs_avg_elev = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_x)) # z/x
+        qrs_avg_azim = np.rad2deg(np.arctan(qrs_avg_y/qrs_avg_x)) # y/x
+    
+    if qrs_avg_y == 0:
+        qrs_avg_zen = 0
+    else:
+        qrs_avg_zen = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_y))  # z/y
+    
+    if qrs_avg_x == 0 and qrs_avg_y == 0:
+        qrs_avg_elev1 = 0
+    else:
+        qrs_avg_elev1 = np.rad2deg(np.arctan(qrs_avg_z/np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y))))
+    
     qrs_avg_mag = np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y) + np.square(qrs_avg_z))
 
     return qrs_avg_elev, qrs_avg_elev1, qrs_avg_azim, qrs_avg_zen, qrs_avg_mag
@@ -548,10 +616,23 @@ def get_tqrs_avg_features(vcg, fiducials, fs):
     qrs_avg_y = np.mean(vcg[1,int(fiducials[3]) - int(0.04*fs):int(fiducials[3])])
     qrs_avg_z = np.mean(vcg[2,int(fiducials[3]) - int(0.04*fs):int(fiducials[3])])
 
-    qrs_avg_elev = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_x)) # z/x
-    qrs_avg_elev1 = np.rad2deg(np.arctan(qrs_avg_z/np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y))))
-    qrs_avg_azim = np.rad2deg(np.arctan(qrs_avg_y/qrs_avg_x)) # y/x
-    qrs_avg_zen = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_y))  # z/y
+    if qrs_avg_x == 0:
+        qrs_avg_elev = 0
+        qrs_avg_azim = 0
+    else:
+        qrs_avg_elev = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_x)) # z/x
+        qrs_avg_azim = np.rad2deg(np.arctan(qrs_avg_y/qrs_avg_x)) # y/x
+    
+    if qrs_avg_y == 0:
+        qrs_avg_zen = 0
+    else:
+        qrs_avg_zen = np.rad2deg(np.arctan(qrs_avg_z/qrs_avg_y))  # z/y
+
+    if qrs_avg_x == 0 and qrs_avg_y == 0:
+        qrs_avg_elev1 = 0
+    else:
+        qrs_avg_elev1 = np.rad2deg(np.arctan(qrs_avg_z/np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y))))
+    
     qrs_avg_mag = np.sqrt(np.square(qrs_avg_x) + np.square(qrs_avg_y) + np.square(qrs_avg_z))
 
     return qrs_avg_elev, qrs_avg_elev1, qrs_avg_azim, qrs_avg_zen, qrs_avg_mag
@@ -563,10 +644,23 @@ def get_t_avg_features(vcg, fiducials):
     t_avg_y = np.mean(vcg[1,int(fiducials[3]):int(fiducials[5])])
     t_avg_z = np.mean(vcg[2,int(fiducials[3]):int(fiducials[5])])
 
-    t_avg_elev = np.rad2deg(np.arctan(t_avg_z/t_avg_x)) # z/x
-    t_avg_elev1 = np.rad2deg(np.arctan(t_avg_z/np.sqrt(np.square(t_avg_x) + np.square(t_avg_y))))
-    t_avg_azim = np.rad2deg(np.arctan(t_avg_y/t_avg_x)) # y/x
-    t_avg_zen = np.rad2deg(np.arctan(t_avg_z/t_avg_y)) # z/y
+    if t_avg_x == 0:
+        t_avg_elev = 0
+        t_avg_azim = 0
+    else:
+        t_avg_elev = np.rad2deg(np.arctan(t_avg_z/t_avg_x)) # z/x
+        t_avg_azim = np.rad2deg(np.arctan(t_avg_y/t_avg_x)) # y/x
+    
+    if t_avg_y == 0:
+        t_avg_zen = 0
+    else:
+        t_avg_zen = np.rad2deg(np.arctan(t_avg_z/t_avg_y)) # z/y
+    
+    if t_avg_x == 0 and t_avg_y == 0:
+        t_avg_elev1 = 0
+    else:
+        t_avg_elev1 = np.rad2deg(np.arctan(t_avg_z/np.sqrt(np.square(t_avg_x) + np.square(t_avg_y))))
+    
     t_avg_mag = np.sqrt(np.square(t_avg_x) + np.square(t_avg_y) + np.square(t_avg_z))
 
     return t_avg_elev, t_avg_elev1, t_avg_azim, t_avg_zen, t_avg_mag
@@ -585,10 +679,23 @@ def get_svg_peak_features(vcg, rpeak, tpeak):
     svg_y = qrs_peak_y + t_peak_y
     svg_z = qrs_peak_z + t_peak_z
 
-    svg_elev = np.rad2deg(np.arctan(svg_z/svg_x)) # z/x
-    svg_elev1 = np.rad2deg(np.arctan(svg_z/np.sqrt(np.square(svg_x) + np.square(svg_y))))
-    svg_azim = np.rad2deg(np.arctan(svg_y/svg_x)) # y/x
-    svg_zen = np.rad2deg(np.arctan(svg_z/svg_y)) # z/y
+    if svg_x == 0:
+        svg_elev = 0
+        svg_azim = 0
+    else:
+        svg_elev = np.rad2deg(np.arctan(svg_z/svg_x)) # z/x
+        svg_azim = np.rad2deg(np.arctan(svg_y/svg_x)) # y/x
+
+    if svg_y == 0:
+        svg_zen = 0
+    else:
+        svg_zen = np.rad2deg(np.arctan(svg_z/svg_y)) # z/y
+    
+    if svg_x == 0 and svg_y == 0:
+        svg_elev1 = 0
+    else:
+        svg_elev1 = np.rad2deg(np.arctan(svg_z/np.sqrt(np.square(svg_x) + np.square(svg_y))))
+    
     svg_mag = np.sqrt(np.square(svg_x) + np.square(svg_y) + np.square(svg_z))
 
     return svg_elev, svg_elev1, svg_azim, svg_zen, svg_mag
@@ -600,10 +707,23 @@ def get_svg_avg_features(vcg, fiducials):
     svg_avg_y = np.mean(vcg[1,int(fiducials[2]):int(fiducials[5])])
     svg_avg_z = np.mean(vcg[2,int(fiducials[2]):int(fiducials[5])])
 
-    svg_avg_elev = np.rad2deg(np.arctan(svg_avg_z/svg_avg_x)) # z/x
-    svg_avg_elev1 = np.rad2deg(np.arctan(svg_avg_z/np.sqrt(np.square(svg_avg_x) + np.square(svg_avg_y))))
-    svg_avg_azim = np.rad2deg(np.arctan(svg_avg_y/svg_avg_x)) # y/x
-    svg_avg_zen = np.rad2deg(np.arctan(svg_avg_z/svg_avg_y)) # z/y
+    if svg_avg_x == 0:
+        svg_avg_elev = 0
+        svg_avg_azim = 0
+    else:
+        svg_avg_elev = np.rad2deg(np.arctan(svg_avg_z/svg_avg_x)) # z/x
+        svg_avg_azim = np.rad2deg(np.arctan(svg_avg_y/svg_avg_x)) # y/x
+    
+    if svg_avg_y == 0:
+        svg_avg_zen = 0
+    else:
+        svg_avg_zen = np.rad2deg(np.arctan(svg_avg_z/svg_avg_y)) # z/y
+    
+    if svg_avg_x == 0 and svg_avg_y == 0:
+        svg_avg_elev1 = 0
+    else:
+        svg_avg_elev1 = np.rad2deg(np.arctan(svg_avg_z/np.sqrt(np.square(svg_avg_x) + np.square(svg_avg_y))))
+    
     svg_avg_mag = np.sqrt(np.square(svg_avg_x) + np.square(svg_avg_y) + np.square(svg_avg_z))
 
     return svg_avg_elev, svg_avg_elev1, svg_avg_azim, svg_avg_zen, svg_avg_mag
@@ -621,9 +741,14 @@ def get_qrst_angle(vcg, rpeak, tpeak):
     t_peak_z = vcg[2,tpeak]
     t_mag = np.sqrt(np.square(t_peak_x) + np.square(t_peak_y) + np.square(t_peak_z))
 
+    if qrs_mag == 0 or t_mag == 0:
+        return 0
+
     qrs_peak_norm = [qrs_peak_x/qrs_mag, qrs_peak_y/qrs_mag, qrs_peak_z/qrs_mag]
     t_peak_norm = [t_peak_x/t_mag, t_peak_y/t_mag, t_peak_z/t_mag]
-    qrst_angle = np.rad2deg(np.arccos(np.dot(qrs_peak_norm, t_peak_norm)))
+    dotprod = np.dot(qrs_peak_norm, t_peak_norm)
+    dotprod = np.clip(dotprod, -1, 1)
+    qrst_angle = np.rad2deg(np.arccos(dotprod))
 
     return qrst_angle
 
@@ -641,9 +766,16 @@ def get_qrst_avg_angle(vcg, fiducials):
     t_avg_z = np.mean(vcg[2,int(fiducials[3]):int(fiducials[5])])
     t_avg_mag = np.sqrt(np.square(t_avg_x) + np.square(t_avg_y) + np.square(t_avg_z))
 
+    if qrs_avg_mag == 0 or t_avg_mag == 0:
+        return 0
+
     qrs_avg_norm = [qrs_avg_x/qrs_avg_mag, qrs_avg_y/qrs_avg_mag, qrs_avg_z/qrs_avg_mag]
     t_avg_norm = [t_avg_x/t_avg_mag, t_avg_y/t_avg_mag, t_avg_z/t_avg_mag]
-    qrst_avg_angle = np.rad2deg(np.arccos(np.dot(qrs_avg_norm, t_avg_norm)))
+    
+    dotprod = np.dot(qrs_avg_norm, t_avg_norm)
+    dotprod = np.clip(dotprod, -1, 1)
+
+    qrst_avg_angle = np.rad2deg(np.arccos(dotprod))
 
     return qrst_avg_angle
 
@@ -1085,7 +1217,7 @@ def get_morphology_scores(vcg, fiducials):
         sig1 = sig1*-1
     sig1 = (sig1 - np.min(sig1))/(np.max(sig1)-np.min(sig1))
 
-    area_sig1 = np.trapz(sig1)
+    area_sig1 = np.trapezoid(sig1)
     sig1 /= area_sig1
     m1 = 0
     for i in range(len(sig1)):
@@ -1105,6 +1237,15 @@ def get_morphology_scores(vcg, fiducials):
     flatness_score = 1-0.1*m4
 
     mcs = asymm_score + 1.9 * notch_score + 1.6 * flatness_score
+
+    if np.isnan(asymm_score):
+        asymm_score = 0
+    if np.isnan(notch_score):
+        notch_score = 0
+    if np.isnan(flatness_score):
+        flatness_score = 0
+    if np.isnan(mcs):
+        mcs = 0
 
     return asymm_score, notch_score, flatness_score, mcs
 
