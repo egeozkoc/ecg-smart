@@ -7,6 +7,7 @@ import base64
 import struct
 import wfdb
 from sierraecg import read_file
+import h5py
 
 def decode_ekg_muse_to_array(raw_wave, downsample = 1):
     """
@@ -213,7 +214,6 @@ def get10sec(filename, lpf=100):
 
     # ZOLL XML
     elif filename.split('.')[-1] == 'json':
-        print('ZOLL json file amplitudes are incorrect. Do not use until fixed.')
         with open(filename) as f:
             dic = json.load(f)
         f.close()
@@ -248,6 +248,7 @@ def get10sec(filename, lpf=100):
         ecg[10] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV5']
         ecg[11] = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['LeadData']['LeadV6']
         fs = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['SampleRate']
+        ecg *= 2.5 # convert to uV
 
     # PTB-XL
     elif filename.split('.')[-1] == 'hea':
@@ -259,6 +260,40 @@ def get10sec(filename, lpf=100):
         sex = 0
         print('Error: Age not found')
         print('Error: Sex not found')
+
+    # Basel H5 files
+    elif filename.split('.')[-1] == 'h5':
+        h5=h5py.File(filename,'r+')
+        fs=int(h5["/rhythms/"].attrs.get('fs'))	#sampling rate
+
+        #check if resolution is uV/Bit
+        resolutionExp=h5["/rhythms/"].attrs.get('resolutionExp') #uV = -6
+        resolutionFactor=h5["/rhythms/"].attrs.get('resolutionFactor') # 1
+        if(resolutionExp !=-6 or resolutionFactor !=1):
+            raise Exception('Unknow amplitude resolution')
+
+        ecg = np.empty((12,5000))
+        #ecg fs,uV/Bit
+        for i,lead in enumerate(leads):
+            data = h5["/rhythms/ECG_"+lead][:,0] * resolutionFactor
+            if fs == 1000:
+                data = signal.resample(data, int(len(data)/2))
+                fs = 500
+            ecg[i,:] = data[0:5000]
+
+        try:
+            age = h5['/patient/'].attrs.get('age')[0]
+            if np.isnan(age):
+                age = 60
+        except:
+            age = 60
+
+        try:
+            sex = h5['/patient/'].attrs.get('sex')[0]
+            if np.isnan(sex):
+                sex = 0
+        except:
+            sex = 0
 
     if fs != 500:
         sig_len = int(ecg.shape[1] / fs * 500)
