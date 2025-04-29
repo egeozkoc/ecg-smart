@@ -1,3 +1,4 @@
+
 import pandas as pd
 import numpy as np
 from scipy import signal
@@ -191,7 +192,6 @@ class MLPModel(torch.nn.Module):
   def __init__(self, input_size, num_classes):
         super(MLPModel, self).__init__()
         self.fc = nn.Linear(input_size, num_classes)
-        self.dropout = nn.Dropout(0.5)
 
   def forward(self, x):
         x = self.fc(x)
