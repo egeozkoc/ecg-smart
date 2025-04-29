@@ -9,8 +9,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, average_precision_score
 from numpy.random import seed
 seed(42)
-from tensorflow import random
-random.set_seed(42)
 import random
 import warnings
 from torch import sigmoid
