@@ -8,6 +8,10 @@ import struct
 import wfdb
 from sierraecg import read_file
 import h5py
+import pandas as pd
+
+ptbxl_df = pd.read_csv('ptbxl_database.csv')
+ptbxl_df['filename_hr'] = ptbxl_df['filename_hr'].apply(lambda x: x.split('/')[-1])
 
 def decode_ekg_muse_to_array(raw_wave, downsample = 1):
     """
@@ -28,6 +32,7 @@ def decode_ekg_muse_to_array(raw_wave, downsample = 1):
     return np.array(byte_array)
 
 def get10sec(filename, lpf=100):
+    global ptbxl_df
     print(filename)
     leads = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
     leads = np.array(leads)
@@ -250,16 +255,23 @@ def get10sec(filename, lpf=100):
         fs = dic['ZOLL']['Report12Lead'][0]['Ecg12LeadRec']['SampleRate']
         ecg *= 2.5 # convert to uV
 
-    # PTB-XL
+    # PTB-XL Files
     elif filename.split('.')[-1] == 'hea':
         ecg = wfdb.rdsamp(filename.split('.')[0])[0]
         ecg = ecg.T
         ecg *= 1000 # convert to uV
         fs = 500
-        age = 60
-        sex = 0
-        print('Error: Age not found')
-        print('Error: Sex not found')
+        id = filename.split('/')[-1].split('.')[0]
+        try:
+            age = int(ptbxl_df[ptbxl_df['filename_hr'] == id]['age'].values[0])
+        except:
+            print('Error: Age not found')
+            age = 60
+        try:
+            sex = int(ptbxl_df[ptbxl_df['filename_hr'] ==id]['sex'].values[0])
+        except:
+            sex = 0
+            print('Error: Sex not found')
 
     # Basel H5 files
     elif filename.split('.')[-1] == 'h5':
