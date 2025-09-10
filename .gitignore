@@ -18,3 +18,6 @@ macbook_mps_test.py
 *.pyc
 /__pycache__
 *.iml
+/test_results_median_beats
+/Splits
+/preprocessed_median_beats
