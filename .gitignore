@@ -1,0 +1,10 @@
+*.xml
+*.npy
+*.csv
+*.pt
+*.png
+*.log
+*.txt
+*.json
+*.wandb
+*.pyc
