@@ -22,3 +22,4 @@ macbook_mps_test.py
 /Splits
 /preprocessed_median_beats
 .DS_Store
+*.pyc
