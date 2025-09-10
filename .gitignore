@@ -8,3 +8,12 @@
 *.json
 *.wandb
 *.pyc
+*.zip
+/wandb
+/UNC Median Beats
+macbook_mps_test.py
+*.xlsx
+/ecg_data
+*.pyc
+*.pyc
+/__pycache__
