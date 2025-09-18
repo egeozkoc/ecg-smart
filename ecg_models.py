@@ -177,7 +177,7 @@ class CBAM(nn.Module):
 # ---------- 2D Residual Block with Attention ----------
 
 class ResidualBlock2D_Attention(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, kernel=3, attention='cbmam', reduction=16, spatial_kernel=(1,7)):
+    def __init__(self, in_channels, out_channels, stride=1, kernel=3, attention='cbam', reduction=16, spatial_kernel=(1,7)):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=(1,kernel), stride=(1,stride),
                                padding=(0, kernel//2), bias=False)
@@ -251,11 +251,11 @@ class ECGSMARTNET_Attention(nn.Module):
 
     def make_layer(self, out_channels, num_blocks, stride, kernel, attention, reduction, spatial_kernel):
         layers = []
-        layers.append(ResidualBlock2D(self.in_channels, out_channels, stride, kernel,
+        layers.append(ResidualBlock2D_Attention(self.in_channels, out_channels, stride, kernel,
                                       attention=attention, reduction=reduction, spatial_kernel=spatial_kernel))
         self.in_channels = out_channels
         for _ in range(1, num_blocks):
-            layers.append(ResidualBlock2D(self.in_channels, out_channels, 1, kernel,
+            layers.append(ResidualBlock2D_Attention(self.in_channels, out_channels, 1, kernel,
                                           attention=attention, reduction=reduction, spatial_kernel=spatial_kernel))
         return nn.Sequential(*layers)
 
