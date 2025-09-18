@@ -95,7 +95,7 @@ def val_epoch(model, device, val_dataloader, criterion):
             val_loss += loss.item() * batch_size
             total_samples += batch_size
 
-            y_pred = y_pred.cpu().detach().numpy()
+            y_pred = y_pred.cpu().detach().to(torch.float32).numpy()
             y = y.cpu().detach().numpy()
 
             ys.append(y)
