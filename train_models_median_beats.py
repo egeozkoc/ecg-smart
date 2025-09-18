@@ -198,7 +198,7 @@ if __name__ == '__main__':
                     np.random.seed(0)
 
                     current_time = time.strftime('%Y-%m-%d-%H-%M-%S')
-                    model = ECGSMARTNET().to(device)
+                    model = ECGSMARTNET_Attention().to(device)
                     wandb.init(project='ecgsmartnet-final', 
                                config={'model': 'ECGSMARTNET', 
                                        'outcome': selected_outcome, 
