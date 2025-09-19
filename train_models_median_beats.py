@@ -183,10 +183,9 @@ if __name__ == '__main__':
 
     np.random.seed(42)
     search_space = {
-        "lr0": lambda: 10**np.random.uniform(-4, -2),   # log-uniform [1e-4, 1e-2]
-        "lr":  lambda: 10**np.random.uniform(-6, -4),   # log-uniform [1e-6, 1e-4]
+        "lr":  lambda: 10**np.random.uniform(-7, -3),   # log-uniform [1e-6, 1e-4]
         "bs":  lambda: random.choice([32, 64, 128, 256]),
-        "wd":  lambda: 10**np.random.uniform(-3, -1),   # log-uniform [1e-3, 1e-1]
+        "wd":  lambda: 10**np.random.uniform(-2, 0),   # log-uniform [1e-3, 1e-1]
     }
     
     count_search = 0
