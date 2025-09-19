@@ -190,7 +190,7 @@ if __name__ == '__main__':
     
     count_search = 0
 
-    n_trials = 50
+    n_trials = 100
     for t in range(n_trials):
         cfg = {k: v() for k, v in search_space.items()}
         print(f"Trial {t+1}/{n_trials}: {cfg}")
@@ -251,7 +251,7 @@ if __name__ == '__main__':
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                torch.save(model, 'models/ecgsmartnet_{}_{}.pt'.format(selected_outcome, current_time))
+                torch.save(model, 'models/ecgsmartnet_attention_{}_{}.pt'.format(selected_outcome, current_time))
                 wandb.run.summary['best_val_loss'] = val_loss
                 wandb.run.summary['best_val_auc'] = val_auc
                 wandb.run.summary['best_val_ap'] = val_ap
