@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
     torch.random.manual_seed(0)
     np.random.seed(0)
-    
+
     search_space = {
         "lr":  lambda: 10**np.random.uniform(-7, -3),   # log-uniform [1e-6, 1e-4]
         "bs":  lambda: random.choice([32, 64, 128, 256]),
@@ -201,9 +201,7 @@ if __name__ == '__main__':
         bs = cfg['bs']
         wd = cfg['wd']
         
-
-        print('NEW RUN: ', count_search)
-
+        
         current_time = time.strftime('%Y-%m-%d-%H-%M-%S')
         model = ECGSMARTNET_Attention().to(device)
         wandb.init(project='ecgsmartnet-attention',
