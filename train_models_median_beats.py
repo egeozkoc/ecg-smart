@@ -181,7 +181,9 @@ if __name__ == '__main__':
     val_dataset = TensorDataset(x_val, y_val)
     num_epochs = 200
 
-    np.random.seed(42)
+    torch.random.manual_seed(0)
+    np.random.seed(0)
+    
     search_space = {
         "lr":  lambda: 10**np.random.uniform(-7, -3),   # log-uniform [1e-6, 1e-4]
         "bs":  lambda: random.choice([32, 64, 128, 256]),
@@ -201,8 +203,6 @@ if __name__ == '__main__':
         
 
         print('NEW RUN: ', count_search)
-        torch.random.manual_seed(0)
-        np.random.seed(0)
 
         current_time = time.strftime('%Y-%m-%d-%H-%M-%S')
         model = ECGSMARTNET_Attention().to(device)
