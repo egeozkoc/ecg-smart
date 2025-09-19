@@ -181,85 +181,88 @@ if __name__ == '__main__':
     val_dataset = TensorDataset(x_val, y_val)
     num_epochs = 200
 
-    lr0s = [1e-2, 1e-3, 1e-4]
-    lrs = [1e-4, 1e-5, 1e-6]
-    bss = [32, 64, 128, 256]
-    wds = [1e-1, 1e-2, 1e-3]
+    search_space = {
+        "lr0": lambda: 10**np.random.uniform(-4, -2).seed(42),   # log-uniform [1e-3, 1e-2]
+        "lr":  lambda: 10**np.random.uniform(-6, -4).seed(42),   # log-uniform [1e-6, 1e-4]
+        "bs":  lambda: random.choice([32, 64, 128, 256]),
+        "wd":  lambda: 10**np.random.uniform(-3, -1).seed(42),   # log-uniform [1e-3, 1e-1]
+    }
     
     count_search = 0
 
-    for lr0 in lr0s:
-        for lr in lrs:
-            for bs in bss:
-                for wd in wds:
-                    count_search += 1
-                    if count_search < 35:
-                        continue
-                    print('NEW RUN: ', count_search)
-                    torch.random.manual_seed(0)
-                    np.random.seed(0)
+    n_trials = 50
+    for t in range(n_trials):
+        cfg = {k: v() for k, v in search_space.items()}
+        print(f"Trial {t+1}/{n_trials}: {cfg}")
 
-                    current_time = time.strftime('%Y-%m-%d-%H-%M-%S')
-                    model = ECGSMARTNET_Attention().to(device)
-                    wandb.init(project='ecgsmartnet-attention',
-                               config={'model': 'ECGSMARTNET_Attention', 
-                                       'outcome': selected_outcome, 
-                                       'num_epochs': 200,
-                                       'lr epoch0': lr0,
-                                       'lr': lr,
-                                       'bs': bs,
-                                       'weight decay': wd,
-                                       'time': current_time
-                                }
-                    )
+        lr = cfg['lr']
+        bs = cfg['bs']
+        wd = cfg['wd']
+        
 
-                    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
-                    criterion = torch.nn.CrossEntropyLoss()
-                    pos_weight = torch.sum(y_val == 0) / torch.sum(y_val == 1)
-                    val_criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1, pos_weight], dtype=torch.float32).to(device))
-                    
-                    scaler = torch.amp.GradScaler(device=device, enabled=True)
+        print('NEW RUN: ', count_search)
+        torch.random.manual_seed(0)
+        np.random.seed(0)
 
-                    train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True)
-                    val_loader = DataLoader(val_dataset, batch_size=bs, shuffle=False)
+        current_time = time.strftime('%Y-%m-%d-%H-%M-%S')
+        model = ECGSMARTNET_Attention().to(device)
+        wandb.init(project='ecgsmartnet-attention',
+                    config={'model': 'ECGSMARTNET_Attention', 
+                            'outcome': selected_outcome, 
+                            'num_epochs': 200,
+                            'lr': lr,
+                            'bs': bs,
+                            'weight decay': wd,
+                            'time': current_time
+                    }
+        )
 
-                    best_val_loss = np.inf
-                    count = 0
-                    for epoch in range(num_epochs):
-                        if epoch >= 0:
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = lr
-                        else:
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = lr0
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
+        criterion = torch.nn.CrossEntropyLoss()
+        pos_weight = torch.sum(y_val == 0) / torch.sum(y_val == 1)
+        val_criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1, pos_weight], dtype=torch.float32).to(device))
+        
+        scaler = torch.amp.GradScaler(device=device, enabled=True)
+
+        train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=bs, shuffle=False)
+
+        best_val_loss = np.inf
+        count = 0
+        for epoch in range(num_epochs):
+            if epoch >= 0:
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = lr
+            else:
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = lr0
 
 
-                        print(f'Epoch {epoch+1}/{num_epochs}')
-                        train_loss, train_auc, train_acc, train_prec, train_rec, train_spec, train_f1, train_ap = train_epoch(model, device, train_loader, criterion, optimizer, scaler)
-                        val_loss, val_auc, val_acc, val_prec, val_rec, val_spec, val_f1, val_ap = val_epoch(model, device, val_loader, val_criterion)
+            print(f'Epoch {epoch+1}/{num_epochs}')
+            train_loss, train_auc, train_acc, train_prec, train_rec, train_spec, train_f1, train_ap = train_epoch(model, device, train_loader, criterion, optimizer, scaler)
+            val_loss, val_auc, val_acc, val_prec, val_rec, val_spec, val_f1, val_ap = val_epoch(model, device, val_loader, val_criterion)
 
-                        wandb.log({'Loss/Train': train_loss}, step=epoch)
-                        wandb.log({'AUC/Train': train_auc}, step=epoch)
-                        wandb.log({'AP/Train': train_ap}, step=epoch)
-                        wandb.log({'Loss/Validation': val_loss}, step=epoch)
-                        wandb.log({'AUC/Validation': val_auc}, step=epoch)
-                        wandb.log({'AP/Validation': val_ap}, step=epoch)
+            wandb.log({'Loss/Train': train_loss}, step=epoch)
+            wandb.log({'AUC/Train': train_auc}, step=epoch)
+            wandb.log({'AP/Train': train_ap}, step=epoch)
+            wandb.log({'Loss/Validation': val_loss}, step=epoch)
+            wandb.log({'AUC/Validation': val_auc}, step=epoch)
+            wandb.log({'AP/Validation': val_ap}, step=epoch)
 
-                        print('Train Loss: {:.3f}, Train AUC: {:.3f}, Train AP: {:.3f}, Train Acc: {:.3f}, Train Prec: {:.3f}, Train Rec: {:.3f}, Train Spec: {:.3f}, Train F1: {:.3f}'.format(train_loss, train_auc, train_ap, train_acc, train_prec, train_rec, train_spec, train_f1))
-                        print('Val Loss: {:.3f}, Val AUC: {:.3f}, Val AP: {:.3f}, Val Acc: {:.3f}, Val Prec: {:.3f}, Val Rec: {:.3f}, Val Spec: {:.3f}, Val F1: {:.3f}'.format(val_loss, val_auc, val_ap, val_acc, val_prec, val_rec, val_spec, val_f1))
+            print('Train Loss: {:.3f}, Train AUC: {:.3f}, Train AP: {:.3f}, Train Acc: {:.3f}, Train Prec: {:.3f}, Train Rec: {:.3f}, Train Spec: {:.3f}, Train F1: {:.3f}'.format(train_loss, train_auc, train_ap, train_acc, train_prec, train_rec, train_spec, train_f1))
+            print('Val Loss: {:.3f}, Val AUC: {:.3f}, Val AP: {:.3f}, Val Acc: {:.3f}, Val Prec: {:.3f}, Val Rec: {:.3f}, Val Spec: {:.3f}, Val F1: {:.3f}'.format(val_loss, val_auc, val_ap, val_acc, val_prec, val_rec, val_spec, val_f1))
 
-                        if val_loss < best_val_loss:
-                            best_val_loss = val_loss
-                            torch.save(model, 'models/ecgsmartnet_{}_{}.pt'.format(selected_outcome, current_time))
-                            wandb.run.summary['best_val_loss'] = val_loss
-                            wandb.run.summary['best_val_auc'] = val_auc
-                            wandb.run.summary['best_val_ap'] = val_ap
-                            wandb.run.summary['best_epoch'] = epoch
-                            count = 0
-                        else:
-                            count +=1
-                        
-                        if count == 10:
-                            wandb.finish()
-                            break
-                    wandb.finish()
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                torch.save(model, 'models/ecgsmartnet_{}_{}.pt'.format(selected_outcome, current_time))
+                wandb.run.summary['best_val_loss'] = val_loss
+                wandb.run.summary['best_val_auc'] = val_auc
+                wandb.run.summary['best_val_ap'] = val_ap
+                wandb.run.summary['best_epoch'] = epoch
+                count = 0
+            else:
+                count +=1
+            
+            if count == 10:
+                break
+        wandb.finish()
