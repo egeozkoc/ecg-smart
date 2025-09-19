@@ -181,11 +181,12 @@ if __name__ == '__main__':
     val_dataset = TensorDataset(x_val, y_val)
     num_epochs = 200
 
+    np.random.seed(42)
     search_space = {
-        "lr0": lambda: 10**np.random.uniform(-4, -2).seed(42),   # log-uniform [1e-3, 1e-2]
-        "lr":  lambda: 10**np.random.uniform(-6, -4).seed(42),   # log-uniform [1e-6, 1e-4]
+        "lr0": lambda: 10**np.random.uniform(-4, -2),   # log-uniform [1e-3, 1e-2]
+        "lr":  lambda: 10**np.random.uniform(-6, -4),   # log-uniform [1e-6, 1e-4]
         "bs":  lambda: random.choice([32, 64, 128, 256]),
-        "wd":  lambda: 10**np.random.uniform(-3, -1).seed(42),   # log-uniform [1e-3, 1e-1]
+        "wd":  lambda: 10**np.random.uniform(-3, -1),   # log-uniform [1e-3, 1e-1]
     }
     
     count_search = 0
