@@ -76,7 +76,7 @@ def val_epoch(model, device, val_dataloader, criterion):
             y = y.to(device)
             x = torch.unsqueeze(x, 1)
 
-            with torch.amp.autocast(device.type, enabled=True):
+            with torch.amp.autocast(device.type, enabled=(device.type == 'cuda')):
                 y_pred = model(x)
                 loss = criterion(y_pred, y)
                 y_pred = torch.softmax(y_pred, dim=-1)
@@ -210,8 +210,10 @@ if __name__ == '__main__':
         val_criterion = criterion
         scaler = torch.amp.GradScaler(enabled=(device.type == 'cuda'))
 
-        train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=bs, shuffle=False)
+        train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True,
+                          num_workers=4, pin_memory=(device.type=='cuda'), persistent_workers=True)
+        val_loader   = DataLoader(val_dataset,   batch_size=bs, shuffle=False,
+                          num_workers=4, pin_memory=(device.type=='cuda'), persistent_workers=True)
 
         best_val_loss = np.inf
         count = 0
