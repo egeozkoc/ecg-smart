@@ -182,7 +182,6 @@ if __name__ == '__main__':
     num_epochs = 200
 
     search_space = {
-        "lr0": lambda: 10**np.random.uniform(-4, -2).seed(42),   # log-uniform [1e-3, 1e-2]
         "lr":  lambda: 10**np.random.uniform(-6, -4).seed(42),   # log-uniform [1e-6, 1e-4]
         "bs":  lambda: random.choice([32, 64, 128, 256]),
         "wd":  lambda: 10**np.random.uniform(-3, -1).seed(42),   # log-uniform [1e-3, 1e-1]
