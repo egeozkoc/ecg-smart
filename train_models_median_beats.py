@@ -9,6 +9,8 @@ import pandas as pd
 import wandb
 import time
 from tkinter.filedialog import askdirectory
+import random
+
 
 def train_epoch(model, device, train_dataloader, criterion, optimizer, scaler):
     train_loss = 0
@@ -199,8 +201,8 @@ if __name__ == '__main__':
 
                     current_time = time.strftime('%Y-%m-%d-%H-%M-%S')
                     model = ECGSMARTNET_Attention().to(device)
-                    wandb.init(project='ecgsmartnet-final', 
-                               config={'model': 'ECGSMARTNET', 
+                    wandb.init(project='ecgsmartnet-attention',
+                               config={'model': 'ECGSMARTNET_Attention', 
                                        'outcome': selected_outcome, 
                                        'num_epochs': 200,
                                        'lr epoch0': lr0,
@@ -211,7 +213,7 @@ if __name__ == '__main__':
                                 }
                     )
 
-                    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+                    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
                     criterion = torch.nn.CrossEntropyLoss()
                     pos_weight = torch.sum(y_val == 0) / torch.sum(y_val == 1)
                     val_criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1, pos_weight], dtype=torch.float32).to(device))
