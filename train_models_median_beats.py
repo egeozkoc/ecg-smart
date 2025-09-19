@@ -10,68 +10,56 @@ import wandb
 import time
 from tkinter.filedialog import askdirectory
 import random
+import os
 
 
 def train_epoch(model, device, train_dataloader, criterion, optimizer, scaler):
-    train_loss = 0
-    total_samples = 0
     model.train()
-    ys = []
-    y_preds = []
+    train_loss, total = 0.0, 0
+    ys, y_preds = [], []
 
-    for (x, y) in train_dataloader:
+    for x, y in train_dataloader:
+        # torch-only balanced subsample per batch
+        idx0 = (y == 0).nonzero(as_tuple=True)[0]
+        idx1 = (y == 1).nonzero(as_tuple=True)[0]
+        if idx0.numel() == 0 or idx1.numel() == 0:
+            continue
+        n = min(idx0.numel(), idx1.numel())
+        sel0 = idx0[torch.randperm(idx0.numel())[:n]]
+        sel1 = idx1[torch.randperm(idx1.numel())[:n]]
+        sel = torch.cat([sel0, sel1])
+        sel = sel[torch.randperm(sel.numel())]
 
-        # undersample the No ACS class
-        indices0 = np.where(y == 0)[0]
-        indices1 = np.where(y == 1)[0]
-        num_samples = np.min([len(indices1), len(indices0)])
+        x = x.index_select(0, sel).unsqueeze(1).to(device)
+        y = y.index_select(0, sel).to(device)
 
-        
-        if num_samples > 0:
+        with torch.amp.autocast(device.type, enabled=(device.type == 'cuda')):
+            logits = model(x)
+            loss = criterion(logits, y)
+            probs = logits.softmax(dim=-1)
 
-            indices0 = np.random.choice(indices0, num_samples, replace=False)
-            indices = np.concatenate([indices0, indices1], axis=0)
-            np.random.shuffle(indices)
-            x = x[indices]
-            y = y[indices]
-            x = torch.unsqueeze(x, 1)
+        optimizer.zero_grad(set_to_none=True)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
-            x = x.to(device)
-            y = y.to(device)
+        bs = y.size(0)
+        train_loss += loss.item() * bs
+        total += bs
+        ys.append(y.detach().cpu().numpy())
+        y_preds.append(probs[:, 1].detach().cpu().to(torch.float32).numpy())
 
-            with torch.amp.autocast(device.type, enabled=True):
-                y_pred = model(x)
-                loss = criterion(y_pred, y)
-                y_pred = torch.softmax(y_pred, dim=-1)
-
-            optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-
-            batch_size = y.size(0)
-            train_loss += loss.item() * batch_size
-            total_samples += batch_size
-
-            y_pred = y_pred.cpu().detach().to(torch.float32).numpy()
-            y = y.cpu().detach().numpy()
-            ys.append(y)
-            y_preds.append(y_pred)
-
-    y = np.concatenate(ys, axis=0)
-    y_pred = np.concatenate(y_preds, axis=0)
-    train_loss /= total_samples
-
-    y_pred = y_pred[:, 1]
+    y = np.concatenate(ys)
+    y_pred = np.concatenate(y_preds)
+    train_loss /= max(total, 1)
 
     auc = roc_auc_score(y, y_pred)
-    ap = average_precision_score(y, y_pred)
+    ap  = average_precision_score(y, y_pred)
     acc = accuracy_score(y, y_pred > 0.5)
     prec = precision_score(y, y_pred > 0.5)
-    rec = recall_score(y, y_pred > 0.5)
+    rec  = recall_score(y, y_pred > 0.5)
     spec = recall_score(y, y_pred > 0.5, pos_label=0)
-    f1 = f1_score(y, y_pred > 0.5)
-
+    f1   = f1_score(y, y_pred > 0.5)
     return train_loss, auc, acc, prec, rec, spec, f1, ap
 
 def val_epoch(model, device, val_dataloader, criterion):
@@ -183,7 +171,6 @@ if __name__ == '__main__':
 
     np.random.seed(42)
     search_space = {
-        "lr0": lambda: 10**np.random.uniform(-4, -2),   # log-uniform [1e-4, 1e-2]
         "lr":  lambda: 10**np.random.uniform(-6, -4),   # log-uniform [1e-6, 1e-4]
         "bs":  lambda: random.choice([32, 64, 128, 256]),
         "wd":  lambda: 10**np.random.uniform(-3, -1),   # log-uniform [1e-3, 1e-1]
@@ -220,10 +207,8 @@ if __name__ == '__main__':
 
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=wd)
         criterion = torch.nn.CrossEntropyLoss()
-        pos_weight = torch.sum(y_val == 0) / torch.sum(y_val == 1)
-        val_criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor([1, pos_weight], dtype=torch.float32).to(device))
-        
-        scaler = torch.amp.GradScaler(device=device, enabled=True)
+        val_criterion = criterion
+        scaler = torch.amp.GradScaler(enabled=(device.type == 'cuda'))
 
         train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=bs, shuffle=False)
@@ -252,7 +237,8 @@ if __name__ == '__main__':
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                torch.save(model, 'models/ecgsmartnet_{}_{}.pt'.format(selected_outcome, current_time))
+                os.makedirs('models_median_beats', exist_ok=True)
+                torch.save(model.state_dict(), f'models_median_beats/ecgsmartnet_{selected_outcome}_{current_time}.pt')
                 wandb.run.summary['best_val_loss'] = val_loss
                 wandb.run.summary['best_val_auc'] = val_auc
                 wandb.run.summary['best_val_ap'] = val_ap
